@@ -290,4 +290,173 @@ sectionHeader("Rage:")
 local pBH = newTab("Bounty Hunting", "💀")
 header(pBH, "Safe Mode:")
 slider(pBH, "Safe Mode Health", "Set the health of the player in safe mode", 30, 100, 40, function(v) S.safeHP = v end)
-toggle(pBH, "Safe Mode", "Teleport to safe position when health is below the set value", false, function(on) S.safeMode
+toggle(pBH, "Safe Mode", "Teleport to safe position when health is below the set value", false, function(on) S.safeMode    end)
+toggle(pBH, "Auto Bounty Hunting", "Enable Auto Bounty Hunting", false, function(on) S.autoBH = on end)
+toggle(pBH, "Auto Hop Server", "Auto hop server when no target found for 60 seconds", false, function(on) S.autoHop = on end)
+
+-- ════════════════════════════════════════════
+--  SKILLS
+-- ════════════════════════════════════════════
+local pSkills = newTab("Skills", "⚔")
+header(pSkills, "Skills:")
+dropdown(pSkills, "Fighting Style", {"Z, X, C"}, function(v) S.fsSkills = v end)
+dropdown(pSkills, "Blox Fruit", {"Z, X, C"}, function(v) S.fruitSkills = v end)
+dropdown(pSkills, "Sword", {"Z, X"}, function(v) S.swordSkills = v end)
+dropdown(pSkills, "Gun", {"Z, X"}, function(v) S.gunSkills = v end)
+header(pSkills, "Holding Skills:")
+toggle(pSkills, "Use Skill Without Holding", "Use the skill without holding the key", false, function(on) S.noHold = on end)
+dropdown(pSkills, "Select Skill Type", {"Melee", "Sword", "Fruit", "Gun"}, function(v) S.delayType = v end)
+slider(pSkills, "Z Delay", "Delay for Z skill (seconds × 100)", 1, 100, 10, function(v) S.zDelay = v end)
+slider(pSkills, "X Delay", "Delay for X skill (seconds × 100)", 1, 100, 10, function(v) S.xDelay = v end)
+slider(pSkills, "C Delay", "Delay for C skill (seconds × 100)", 1, 100, 10, function(v) S.cDelay = v end)
+
+-- ════════════════════════════════════════════
+--  KEY BIND
+-- ════════════════════════════════════════════
+local pKey = newTab("Key Bind", "⌨")
+header(pKey, "Key Bind:")
+dropdown(pKey, "Aimbot Key", {"B", "V", "F", "Q", "E"}, function(v) S.aimKey = Enum.KeyCode[v] end)
+dropdown(pKey, "Teleport Behide Target Key", {"N", "M", "G", "H"}, function(v) S.tbtKey = Enum.KeyCode[v] end)
+
+-- ════════════════════════════════════════════
+--  MISC & UTILITY
+-- ════════════════════════════════════════════
+local pMisc = newTab("Misc", "⚙")
+header(pMisc, "Miscellaneous :")
+toggle(pMisc, "Fps Boost", "Boost FPS.", false, function(on) S.fpsBoost = on end)
+
+local pServer = newTab("Server", "🌐")
+header(pServer, "Server Information:")
+local jobIdBox
+button(pServer, "Copy JobId", function() if setclipboard then setclipboard(game.JobId) end end)
+jobIdBox = c("TextBox", {Parent = pServer, Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = T.card, BackgroundTransparency = ROW_TR, BorderSizePixel = 0, Text = "Target JobId...", TextColor3 = T.text, Font = Enum.Font.Gotham, TextSize = 13, PlaceholderText = "Target JobId...", PlaceholderColor3 = T.dim})
+corner(jobIdBox, 10); stroke(jobIdBox, T.stroke, 1, 0.85); pad(jobIdBox, 0, 10, 10, 0)
+button(pServer, "Teleport", function()
+    local jid = jobIdBox.Text
+    if jid and #jid > 10 then pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, jid, LP) end) end
+end)
+button(pServer, "Rejoin", function() pcall(function() TeleportService:Teleport(game.PlaceId, LP) end) end)
+button(pServer, "Hop Server", function()
+    local suc, servers = pcall(function() return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")) end)
+    if suc and servers and servers.data then
+        for _, s in ipairs(servers.data) do
+            if s.playing < s.maxPlayers and s.id ~= game.JobId then
+                pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP) end)
+                break
+            end
+        end
+    end
+end)
+
+local pConfig = newTab("Config", "💾")
+header(pConfig, "Config:")
+button(pConfig, "Save Config", function() pcall(function() writefile("kudo_config.json", HttpService:JSONEncode(S)) end) end)
+button(pConfig, "Reset Config", function() pcall(function() writefile("kudo_config.json", "{}") end) end)
+
+-- ════════════════════════════════════════════
+--  RUNTIME LOGIC
+-- ════════════════════════════════════════════
+selectTab("General")
+
+local function getTarget()
+    local best, bestDist = nil, S.aimRange
+    local myHRP = getHRP()
+    if not myHRP then return nil end
+    local center = Cam.ViewportSize / 2
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChildOfClass("Humanoid") and p.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+            local hrp = p.Character.HumanoidRootPart
+            local dist = (hrp.Position - myHRP.Position).Magnitude
+            if dist <= bestDist then
+                local sp, onScreen = Cam:WorldToViewportPoint(hrp.Position)
+                local fovDist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                if onScreen and fovDist <= S.fovSize then
+                    best, bestDist = p, dist
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- Movement
+RunService.Heartbeat:Connect(function()
+    local hum = getHum()
+    if not hum then return end
+    if S.speedBoost then hum.WalkSpeed = 16 * S.speedMult else hum.WalkSpeed = 16 end
+    if S.jumpBoost then hum.JumpPower = 100 else hum.JumpPower = 50 end
+end)
+
+-- Aimbot
+RunService.RenderStepped:Connect(function()
+    if S.aimbot then
+        local t = getTarget()
+        if t and t.Character and t.Character:FindFirstChild("Head") then
+            Cam.CFrame = CFrame.new(Cam.CFrame.Position, t.Character.Head.Position)
+        end
+    end
+end)
+
+-- Attack Aura
+task.spawn(function()
+    while task.wait(0.1) do
+        if S.attackAura then
+            local t = getTarget()
+            if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") then
+                pcall(function() getHRP().CFrame = t.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 2) end)
+                clickM1()
+            end
+        end
+    end
+end)
+
+-- Auto Skills (Spam Z, X, C)
+task.spawn(function()
+    while task.wait(0.1) do
+        if S.autoSkills then
+            pressKey(Enum.KeyCode.Z)
+            task.wait(S.zDelay/100)
+            pressKey(Enum.KeyCode.X)
+            task.wait(S.xDelay/100)
+            pressKey(Enum.KeyCode.C)
+        end
+    end
+end)
+
+-- ESP / Target visualization
+local draw = Drawing.new("Text")
+draw.Visible = false
+draw.Color = Color3.fromRGB(255, 80, 80)
+draw.Size = 16
+draw.Center = true
+draw.Outline = true
+
+RunService.RenderStepped:Connect(function()
+    if S.aimbot or S.attackAura then
+        local t = getTarget()
+        if t and t.Character and t.Character:FindFirstChild("Head") then
+            local sp, onScreen = Cam:WorldToViewportPoint(t.Character.Head.Position)
+            if onScreen then
+                draw.Text = t.Name
+                draw.Position = Vector2.new(sp.X, sp.Y - 20)
+                draw.Visible = true
+            else
+                draw.Visible = false
+            end
+        else
+            draw.Visible = false
+        end
+    else
+        draw.Visible = false
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(i, p)
+    if p then return end
+    if i.KeyCode == Enum.KeyCode.RightShift then Root.Visible = not Root.Visible end
+    if i.KeyCode == Enum.KeyCode.B and S.aimbot then
+        -- manual aim trigger if needed
+    end
+end)
+
+print("[Kudo] Loaded successfully. Right Shift to toggle.")
