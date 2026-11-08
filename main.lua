@@ -203,3 +203,91 @@ local function dropdown(page, label, options, cb)
     hit.MouseButton1Click:Connect(function() idx = idx % #options + 1; cur = options[idx]; lbl.Text = label .. ":  " .. cur; if cb then cb(cur) end end)
     table.insert(allRowCache, {frame = card, text = label})
 end
+
+-- ════════════════════════════════════════════
+--  STATE + HELPERS
+-- ════════════════════════════════════════════
+local S = {
+    antiStun=false, speedMult=3, speedBoost=false, jumpBoost=false, walkWater=false,
+    busoHaki=false, kenHaki=false, raceV3=false, raceV4=false, aimbot=false,
+    silentAim=false, fovSize=200, aimRange=500, aimTarget="Player", fovMode="Middle",
+    showFov=false, soruRange=250, soruSilent=false, attackAura=false, tbtRange=30,
+    tbt=false, autoSkills=false, drawRedLine=false, drawSphere=false, espName=true,
+    espHealth=true, espDist=false, espTeam=false, espLevel=false, espBounty=false,
+    espKen=false, espPvp=false, safeHP=40, safeMode=false, bountyTeam="Pirates",
+    autoBH=false, autoHop=false, fsSkills="Z, X, C", fruitSkills="Z, X, C",
+    swordSkills="Z, X", gunSkills="Z, X", noHold=false, delayType="Melee",
+    zDelay=10, xDelay=10, cDelay=10, aimKey=Enum.KeyCode.B, tbtKey=Enum.KeyCode.N,
+    fpsBoost=false, target=nil, espCache={}, aimedAt=nil,
+}
+
+local function getChar() return LP.Character or LP.CharacterAdded:Wait() end
+local function getHum() return getChar():FindFirstChildOfClass("Humanoid") end
+local function getHRP() return getChar():FindFirstChild("HumanoidRootPart") end
+local function clickM1() VIM:SendMouseButtonEvent(0, 0, 0, true, game, 1); VIM:SendMouseButtonEvent(0, 0, 0, false, game, 1) end
+local function pressKey(k) pcall(function() VIM:SendKeyEvent(true, k, false, game); task.wait(0.03); VIM:SendKeyEvent(false, k, false, game) end) end
+
+-- ════════════════════════════════════════════
+--  TABS — GENERAL
+-- ════════════════════════════════════════════
+sectionHeader("Legit:")
+local pGen = newTab("General", "⚔")
+header(pGen, "Player Modifier:")
+toggle(pGen, "Anti Stun", "Enable to activate Anti Stun", false, function(on) S.antiStun = on end)
+slider(pGen, "Speed Multiply", "Multiply the speed of the player", 1, 5, 3, function(v) S.speedMult = v end)
+toggle(pGen, "Speed Boost", "Enable to activate Speed Boost", false, function(on) S.speedBoost = on end)
+toggle(pGen, "Jump Power", "Enable to activate Jump Power", false, function(on) S.jumpBoost = on end)
+toggle(pGen, "Walk On Water", "Enable to walk on water", false, function(on) S.walkWater = on end)
+header(pGen, "Activate Haki:")
+toggle(pGen, "Buso Haki", "Enable to activate Buso Haki", false, function(on) S.busoHaki = on end)
+toggle(pGen, "Ken Haki", "Enable to activate Ken Haki", false, function(on) S.kenHaki = on end)
+header(pGen, "Ability:")
+toggle(pGen, "Race V3", "Enable to activate Race V3", false, function(on) S.raceV3 = on end)
+toggle(pGen, "Race V4", "Enable to activate Race V4", false, function(on) S.raceV4 = on end)
+
+-- ════════════════════════════════════════════
+--  COMBAT
+-- ════════════════════════════════════════════
+local pCom = newTab("Combat", "⚡")
+header(pCom, "Aimbot:")
+toggle(pCom, "Aimbot (Camera Lock)", "Stick camera at target", false, function(on) S.aimbot = on end)
+toggle(pCom, "Silent Aim", "Silent aim skill, gun shot", false, function(on) S.silentAim = on end)
+slider(pCom, "FOV Size", "The size of the FOV circle", 50, 500, 200, function(v) S.fovSize = v end)
+slider(pCom, "Aim Range", "The range of aimbot", 100, 1000, 500, function(v) S.aimRange = v end)
+dropdown(pCom, "Aim Target", {"Player", "Mob", "Cursor"}, function(v) S.aimTarget = v end)
+dropdown(pCom, "FOV Mode", {"Middle", "180°", "360°"}, function(v) S.fovMode = v end)
+toggle(pCom, "FOV Circle", "Show the FOV circle on the screen", false, function(on) S.showFov = on end)
+header(pCom, "Soru:")
+slider(pCom, "Soru Silent Range", "The range of Soru silent", 50, 500, 250, function(v) S.soruRange = v end)
+toggle(pCom, "Soru Silent", "Force Soru to target position.", false, function(on) S.soruSilent = on end)
+header(pCom, "Attack Aura:")
+toggle(pCom, "Attack Aura", "Attack aura to target player. (Melee, Sword, Fruit M1)", false, function(on) S.attackAura = on end)
+slider(pCom, "Teleport Behide Target Range", "The range of teleport behide target", 5, 100, 30, function(v) S.tbtRange = v end)
+toggle(pCom, "Teleport Behide Target", "Teleport behind the target", false, function(on) S.tbt = on end)
+toggle(pCom, "Auto Skills", "Auto use skills", false, function(on) S.autoSkills = on end)
+header(pCom, "Visualize:")
+toggle(pCom, "Draw Red Line", "Draw the red line around the target", false, function(on) S.drawRedLine = on end)
+toggle(pCom, "Draw Sphere", "Draw the sphere around the target", false, function(on) S.drawSphere = on end)
+
+-- ════════════════════════════════════════════
+--  ESP
+-- ════════════════════════════════════════════
+local pESP = newTab("ESP", "👁")
+header(pESP, "ESP Player:")
+toggle(pESP, "Name", "Show the name of the player", true, function(on) S.espName = on end)
+toggle(pESP, "Health", "Show the health of the player", true, function(on) S.espHealth = on end)
+toggle(pESP, "Distance", "Show the distance of the player", false, function(on) S.espDist = on end)
+toggle(pESP, "Team", "Show the team of the player", false, function(on) S.espTeam = on end)
+toggle(pESP, "Level", "Show the level of the player", false, function(on) S.espLevel = on end)
+toggle(pESP, "Bounty", "Show the bounty of the player", false, function(on) S.espBounty = on end)
+toggle(pESP, "Ken Active", "Show the ken active of the player", false, function(on) S.espKen = on end)
+toggle(pESP, "Pvp State", "Show pvp status InCombat, Disable Pvp, Ready Pvp", false, function(on) S.espPvp = on end)
+
+-- ════════════════════════════════════════════
+--  BOUNTY HUNTING
+-- ════════════════════════════════════════════
+sectionHeader("Rage:")
+local pBH = newTab("Bounty Hunting", "💀")
+header(pBH, "Safe Mode:")
+slider(pBH, "Safe Mode Health", "Set the health of the player in safe mode", 30, 100, 40, function(v) S.safeHP = v end)
+toggle(pBH, "Safe Mode", "Teleport to safe position when health is below the set value", false, function(on) S.safeMode
