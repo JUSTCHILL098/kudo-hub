@@ -3,14 +3,14 @@
   Rebuild of the hermanos-dev feature set. Rebranded, no key gate, glass UI.
 ]]
 
-local Players              = game:GetService("Players")
-local RunService           = game:GetService("RunService")
-local UserInputService     = game:GetService("UserInputService")
-local TweenService         = game:GetService("TweenService")
-local ReplicatedStorage    = game:GetService("ReplicatedStorage")
-local VirtualInputManager  = game:GetService("VirtualInputManager")
-local TeleportService      = game:GetService("TeleportService")
-local HttpService          = game:GetService("HttpService")
+local Players             = game:GetService("Players")
+local RunService          = game:GetService("RunService")
+local UserInputService    = game:GetService("UserInputService")
+local TweenService        = game:GetService("TweenService")
+local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TeleportService     = game:GetService("TeleportService")
+local HttpService         = game:GetService("HttpService")
 
 local LP  = Players.LocalPlayer
 local Cam = workspace.CurrentCamera
@@ -47,7 +47,7 @@ c("Frame", {Parent = TitleBar, Size = UDim2.new(1, 0, 0, 12), Position = UDim2.n
 c("TextLabel", {Parent = TitleBar, Size = UDim2.new(0, 60, 0, 20), Position = UDim2.new(0, 16, 0, 6), BackgroundTransparency = 1, Text = "KUDO", TextColor3 = T.text, Font = Enum.Font.GothamBold, TextSize = 17, TextXAlignment = Enum.TextXAlignment.Left})
 c("TextLabel", {Parent = TitleBar, Size = UDim2.new(0, 300, 0, 14), Position = UDim2.new(0, 16, 0, 26), BackgroundTransparency = 1, Text = "[⚔️] - Blox Fruit | Kudo-Hub", TextColor3 = T.dim, Font = Enum.Font.Gotham, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left})
 
-local verPill = c("TextButton", {Parent = TitleBar, Size = UDim2.new(0, 110, 0, 24), Position = UDim2.new(0, 250, 0.5, -12), BackgroundColor3 = Color3.fromRGB(210, 55, 65), BorderSizePixel = 0, Text = "🛡  1.0 - FREE", TextColor3 = Color3.new(1,1,1), Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false})
+local verPill = c("TextButton", {Parent = TitleBar, Size = UDim2.new(0, 110, 0, 24), Position = UDim2.new(0, 250, 0.5, -12), BackgroundColor3 = Color3.fromRGB(210, 55, 65), BorderSizePixel = 0, Text = "🛡️  1.0 - FREE", TextColor3 = Color3.new(1,1,1), Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false})
 corner(verPill, 12); stroke(verPill, Color3.fromRGB(255,130,130), 1, 0.5)
 
 local discPill = c("TextButton", {Parent = TitleBar, Size = UDim2.new(0, 200, 0, 24), Position = UDim2.new(0, 370, 0.5, -12), BackgroundColor3 = Color3.fromRGB(245, 245, 250), BorderSizePixel = 0, Text = "🔗  discord.gg/kudo", TextColor3 = Color3.fromRGB(30,30,40), Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false})
@@ -290,7 +290,7 @@ sectionHeader("Rage:")
 local pBH = newTab("Bounty Hunting", "💀")
 header(pBH, "Safe Mode:")
 slider(pBH, "Safe Mode Health", "Set the health of the player in safe mode", 30, 100, 40, function(v) S.safeHP = v end)
-toggle(pBH, "Safe Mode", "Teleport to safe position when health is below the set value", false, function(on) S.safeMode    end)
+toggle(pBH, "Safe Mode", "Teleport to safe position when health is below the set value", false, function(on) S.safeMode = on end)
 toggle(pBH, "Auto Bounty Hunting", "Enable Auto Bounty Hunting", false, function(on) S.autoBH = on end)
 toggle(pBH, "Auto Hop Server", "Auto hop server when no target found for 60 seconds", false, function(on) S.autoHop = on end)
 
@@ -454,9 +454,6 @@ end)
 UserInputService.InputBegan:Connect(function(i, p)
     if p then return end
     if i.KeyCode == Enum.KeyCode.RightShift then Root.Visible = not Root.Visible end
-    if i.KeyCode == Enum.KeyCode.B and S.aimbot then
-        -- manual aim trigger if needed
-    end
 end)
 
 print("[Kudo] Loaded successfully. Right Shift to toggle.")
