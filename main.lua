@@ -1,4 +1,4 @@
---[[ KUDO Hub — Fully Embedded Redz UI (No HttpGet required) ]]
+-- KUDO Hub - Embedded Redz UI
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -89,9 +89,9 @@ function Library:AddButton(page, name, cb)
     btn.MouseButton1Click:Connect(cb)
 end
 
--- 2. FEATURE LOGIC (Anti-Resets applied)
+-- 2. FEATURE LOGIC
 local State = { Speed = false, WalkWater = false, Aimbot = false }
-local Codes = {"LIGHTNINGABUSE","1LOSTADMIN ","ADMINFIGHT","NOMOREHACK","BANEXPLOIT","krazydares","TRIPLEABUSE","24NOADMIN","REWARDFUN","Chandler","NEWTROLL","KITT_RESET","Sub2CaptainMaui","kittgaming","Sub2Fer999","Enyu_is_Pro","Magicbus","JCWK","Starcodeheo","Bluxxy","fudd10_v2","SUB2GAMERROBOT_EXP1","Sub2NoobMaster123","Sub2UncleKizaru","Sub2Daigrock","Axiore","TantaiGaming","StrawHatMaine","Sub2OfficialNoobie","Fudd10","Bignews","TheGreatAce","SECRET_ADMIN","SUB2GAMERROBOT_RESET1","SUB2OFFICIALNOOBIE","AXIORE","BIGNEWS","BLUXXY","CHANDLER","ENYU_IS_PRO","FUDD10","FUDD10_V2","KITTGAMING","MAGICBUS","STARCODEHEO","STRAWHATMAINE","SUB2CAPTAINMAUI","SUB2DAIGROCK","SUB2FER999","SUB2NOOBMASTER123","SUB2UNCLEKIZARU","TANTAIGAMING","THEGREATACE"}
+local Codes = {"LIGHTNINGABUSE","1LOSTADMIN","ADMINFIGHT","NOMOREHACK","BANEXPLOIT","krazydares","TRIPLEABUSE","24NOADMIN","REWARDFUN","Chandler","NEWTROLL","KITT_RESET","Sub2CaptainMaui","kittgaming","Sub2Fer999","Enyu_is_Pro","Magicbus","JCWK","Starcodeheo","Bluxxy","fudd10_v2","SUB2GAMERROBOT_EXP1","Sub2NoobMaster123","Sub2UncleKizaru","Sub2Daigrock","Axiore","TantaiGaming","StrawHatMaine","Sub2OfficialNoobie","Fudd10","Bignews","TheGreatAce","SECRET_ADMIN","SUB2GAMERROBOT_RESET1","SUB2OFFICIALNOOBIE","AXIORE","BIGNEWS","BLUXXY","CHANDLER","ENYU_IS_PRO","FUDD10","FUDD10_V2","KITTGAMING","MAGICBUS","STARCODEHEO","STRAWHATMAINE","SUB2CAPTAINMAUI","SUB2DAIGROCK","SUB2FER999","SUB2NOOBMASTER123","SUB2UNCLEKIZARU","TANTAIGAMING","THEGREATACE"}
 
 local function getChar() return LP.Character or LP.CharacterAdded:Wait() end
 local function getHum() return getChar():FindFirstChildOfClass("Humanoid") end
@@ -160,4 +160,4 @@ UserInputService.InputBegan:Connect(function(i,p)
     if p then return end
     if i.KeyCode == Enum.KeyCode.RightShift then Main.Visible = not Main.Visible end
 end)
-print("[Kudo] Fully Embedded UI loaded.")
+print("[Kudo] Successfully loaded.")
