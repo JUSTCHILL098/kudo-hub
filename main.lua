@@ -1,4 +1,4 @@
---[[ KUDO Hub — Mobile Fixed Build ]]
+--[[ KUDO Hub — Mobile Fixed Build (v2) ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -23,7 +23,8 @@ local T = {
 
 local function c(cls, props) local o = Instance.new(cls); for k,v in pairs(props or {}) do o[k]=v end return o end
 local function corner(p,r) c("UICorner",{CornerRadius=UDim.new(0,r or 8),Parent=p}) end
-local function stroke(p,c,t,tr) c("UIStroke",{Color=c or Color3.new(1,1,1),Thickness=t or 1,Transparency=tr or 0.6,Parent=p}) end
+-- FIXED: renamed parameter 'c' to 'col' so it doesn't shadow the create function
+local function stroke(p,col,t,tr) c("UIStroke",{Color=col or Color3.new(1,1,1),Thickness=t or 1,Transparency=tr or 0.6,Parent=p}) end
 local function pad(p,t,l,r,b) c("UIPadding",{Parent=p,PaddingTop=UDim.new(0,t or 0),PaddingLeft=UDim.new(0,l or 0),PaddingRight=UDim.new(0,r or 0),PaddingBottom=UDim.new(0,b or 0)}) end
 local function tween(o,d,p) TweenService:Create(o,TweenInfo.new(d or 0.15),p):Play() end
 
@@ -186,7 +187,7 @@ RunService.RenderStepped:Connect(function()
         if hrp then
             local ray = Ray.new(hrp.Position, Vector3.new(0,-10,0))
             local hit, pos = workspace:FindPartOnRay(ray, getChar())
-            if hit and hit.Name == "Water" or (hit and hit.Material == Enum.Material.Water) then
+            if hit and (hit.Name == "Water" or hit.Material == Enum.Material.Water) then
                 hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
                 hrp.CFrame = CFrame.new(pos + Vector3.new(0, 2.5, 0))
             end
