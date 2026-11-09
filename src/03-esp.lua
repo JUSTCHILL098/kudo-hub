@@ -1,5 +1,4 @@
 -- language: Lua, file: 03-esp.lua
--- nine ESP pools. matcher now matches real Blox Fruits model names.
 return function(Hub)
     local Workspace = Hub.Workspace
     local LP = Hub.LP
@@ -56,20 +55,13 @@ return function(Hub)
         return false
     end
 
-    local function is_shop_part(obj)
-        local n = obj.Name
-        return n == "Handle" or n == "Body" or n == "RootPart" or n == "HumanoidRootPart"
-            or n:match("^pumpkin") or n:match("^PumpkinV")
-            or n:match("^Cylinder") or n:match("^Part")
-    end
-
     local function scan(key, match_fn)
         local cfg = CFG.esp[key]
         if not cfg.on then clear(key); return end
         local root = hrp(); if not root then return end
         local seen = {}
         for _, obj in ipairs(Workspace:GetDescendants()) do
-            if (obj:IsA("Model") or obj:IsA("BasePart")) and not is_shop_part(obj) and match_fn(obj) then
+            if (obj:IsA("Model") or obj:IsA("BasePart")) and match_fn(obj) then
                 local anchor = obj.PrimaryPart
                     or obj:FindFirstChild("HumanoidRootPart")
                     or obj:FindFirstChild("Head")
@@ -81,13 +73,9 @@ return function(Hub)
                         local gui = make(obj, key)
                         if gui then
                             local lines = { obj.Name }
-                            if cfg.dist_show ~= false then
-                                table.insert(lines, string.format("%d st", math.floor(d)))
-                            end
+                            if cfg.dist_show ~= false then table.insert(lines, string.format("%d st", math.floor(d))) end
                             local h = obj:FindFirstChildOfClass("Humanoid")
-                            if h and cfg.hp then
-                                table.insert(lines, string.format("HP %d", math.floor(h.Health)))
-                            end
+                            if h and cfg.hp then table.insert(lines, string.format("HP %d", math.floor(h.Health))) end
                             set_text(gui, lines)
                         end
                     end
@@ -128,10 +116,7 @@ return function(Hub)
             end
         end
         for obj, gui in pairs(pool("players").objs) do
-            if not seen[obj] then
-                pcall(function() gui:Destroy() end)
-                pool("players").objs[obj] = nil
-            end
+            if not seen[obj] then pcall(function() gui:Destroy() end); pool("players").objs[obj] = nil end
         end
     end
 
@@ -142,7 +127,7 @@ return function(Hub)
             return n:find("Island") or n:find("Kingdom") or n:find("Village")
                 or n:find("Castle") or n:find("Fortress") or n:find("Dojo")
                 or n:find("Cafe") or n:find("Town") or n:find("Rose")
-                or n:find("City") or n:find("Prison") or n:find("Island")
+                or n:find("City") or n:find("Prison")
         end,
         fruits = function(o)
             if not o:IsA("Model") and not o:IsA("BasePart") then return false end
@@ -158,23 +143,17 @@ return function(Hub)
         end,
         dealers = function(o)
             if not o:IsA("Model") then return false end
-            return o.Name:find("Dealer") or o.Name:find("Vendor")
-                or o.Name:find("Merchant") or o.Name:find("Barter")
+            return o.Name:find("Dealer") or o.Name:find("Vendor") or o.Name:find("Merchant") or o.Name:find("Barter")
         end,
         mobs = function(o)
             if not o:IsA("Model") then return false end
-            if o == LP.Character then return false end
-            if is_player_model(o) then return false end
-            if o.PrimaryPart == nil and o:FindFirstChild("Humanoid") == nil then return false end
+            if o == LP.Character or is_player_model(o) then return false end
             local h = o:FindFirstChildOfClass("Humanoid")
-            if not h then return false end
-            if h.Health <= 0 then return false end
-            return true
+            return h and h.Health > 0
         end,
         items = function(o)
             if not o:IsA("Model") and not o:IsA("BasePart") then return false end
-            return o.Name:find("Item") or o.Name:find("Pickup") or o.Name:find("Drop")
-                or o.Name:find("Material")
+            return o.Name:find("Item") or o.Name:find("Pickup") or o.Name:find("Drop") or o.Name:find("Material")
         end,
         pumpkins = function(o)
             if not o:IsA("Model") then return false end
@@ -186,9 +165,7 @@ return function(Hub)
         while true do
             task.wait(1)
             pcall(players_scan)
-            for key, fn in pairs(MATCH) do
-                pcall(scan, key, fn)
-            end
+            for key, fn in pairs(MATCH) do pcall(scan, key, fn) end
         end
     end)
 
