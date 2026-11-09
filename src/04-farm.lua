@@ -1,6 +1,5 @@
 -- language: Lua, file: 04-farm.lua
--- farm loop + kill-aura (capped) + bring-mobs (velocity) + hop.
--- consumes Hub.CFG, Hub.hrp, Hub.hum, Hub.fire from 01-config.
+-- farm uses Activated:FireServer path. forced equip on first tick.
 return function(Hub)
     local CFG = Hub.CFG
     local LP = Hub.LP
@@ -21,8 +20,10 @@ return function(Hub)
                 local h = obj:FindFirstChildOfClass("Humanoid")
                 local r = obj:FindFirstChild("HumanoidRootPart")
                 if h and h.Health > 0 and r and obj ~= LP.Character then
-                    local d = (r.Position - root.Position).Magnitude
-                    if d < bd then best, bd = obj, d end
+                    if not obj:FindFirstChildOfClass("Player") then
+                        local d = (r.Position - root.Position).Magnitude
+                        if d < bd then best, bd = obj, d end
+                    end
                 end
             end
         end
@@ -33,25 +34,44 @@ return function(Hub)
         local h = hum(); if h then h:MoveTo(pos) end
     end
 
+    local function get_equipped_tool()
+        local c = LP.Character; if not c then return nil end
+        return c:FindFirstChildOfClass("Tool")
+    end
+
     local function try_attack()
         local c = LP.Character; if not c then return end
-        local tool = c:FindFirstChildOfClass("Tool"); if not tool then return end
+        local tool = c:FindFirstChildOfClass("Tool")
+        if not tool then
+            Hub.equip_saber()
+            return
+        end
         local now = os.clock()
         if now - CFG.last.attack < CFG.farm.attack_ms / 1000 then return end
         CFG.last.attack = now
-        pcall(function()
-            local act = tool:FindFirstChild("Activated")
-            if act and act:IsA("RemoteEvent") then act:FireServer() end
-            tool:Activate()
-        end)
+        local fired = false
+        local act = tool:FindFirstChild("Activated")
+        if act and act:IsA("RemoteEvent") then
+            pcall(function() act:FireServer() end)
+            fired = true
+        end
+        if not fired then
+            local remote = Hub.remote("CommF_")
+            if remote then
+                if remote:IsA("RemoteFunction") then
+                    pcall(function() remote:InvokeServer("Attack") end)
+                elseif remote:IsA("RemoteEvent") then
+                    pcall(function() remote:FireServer("Attack") end)
+                end
+            end
+        end
+        pcall(function() tool:Activate() end)
     end
 
     local function set_team()
         if not CFG.farm.auto_team then return end
         local t = Teams:FindFirstChild(CFG.farm.target_team)
-        if t and LP.Team ~= t then
-            fire("CommE", "SetTeam", CFG.farm.target_team)
-        end
+        if t and LP.Team ~= t then fire("CommE", "SetTeam", CFG.farm.target_team) end
     end
 
     local function equip_saber()
@@ -70,7 +90,14 @@ return function(Hub)
         local now = os.clock()
         if now - CFG.last.aura < interval then return end
         CFG.last.aura = now
-        fire("CommF_", "Attack", CFG.aura.radius)
+        local remote = Hub.remote("CommF_")
+        if remote then
+            if remote:IsA("RemoteFunction") then
+                pcall(function() remote:InvokeServer("Attack", CFG.aura.radius) end)
+            elseif remote:IsA("RemoteEvent") then
+                pcall(function() remote:FireServer("Attack", CFG.aura.radius) end)
+            end
+        end
     end
 
     local function bring_tick()
@@ -103,18 +130,14 @@ return function(Hub)
         if now - CFG.last.hop < CFG.farm.hop_sec then return end
         CFG.last.hop = now
         local ok, raw = pcall(function()
-            return game:HttpGet(
-                "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?limit=50"
-            )
+            return game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?limit=50")
         end)
         if ok and raw then
             local dec = HttpService:JSONDecode(raw)
             if dec and dec.data then
                 for _, s in ipairs(dec.data) do
                     if s.id ~= game.JobId and s.playing < s.maxPlayers then
-                        pcall(function()
-                            TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP)
-                        end)
+                        pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP) end)
                         return
                     end
                 end
@@ -127,7 +150,10 @@ return function(Hub)
         if CFG.farm.on then return end
         CFG.farm.on = true; CFG.farm.stop = false
         local started = os.time()
-        set_team(); equip_saber()
+        set_team()
+        equip_saber()
+        task.wait(1)
+        equip_saber()
         task.spawn(function()
             while not CFG.farm.stop do
                 if os.time() - started > CFG.farm.max_minutes * 60 then break end
@@ -154,9 +180,7 @@ return function(Hub)
         task.spawn(function() while not CFG.farm.stop do task.wait(60);    hop_tick() end end)
     end
 
-    local function stop()
-        CFG.farm.stop = true; CFG.farm.on = false
-    end
+    local function stop() CFG.farm.stop = true; CFG.farm.on = false end
 
     Hub.farm_start = start
     Hub.farm_stop = stop
