@@ -11,29 +11,49 @@ return function(Hub)
 
     local LP = Players.LocalPlayer
 
-    local function hrp() local c = LP.Character; return c and c:FindFirstChild("HumanoidRootPart") end
-    local function hum() local c = LP.Character; return c and c:FindFirstChildOfClass("Humanoid") end
-    local function alive() local h = hum(); return h and h.Health > 0 end
+    local function hrp()
+        local c = LP.Character
+        return c and c:FindFirstChild("HumanoidRootPart")
+    end
+    local function hum()
+        local c = LP.Character
+        return c and c:FindFirstChildOfClass("Humanoid")
+    end
+    local function alive()
+        local h = hum()
+        return h and h.Health > 0
+    end
 
     local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+
     local function remote(name)
         if not Remotes then return nil end
         return Remotes:FindFirstChild(name)
     end
+
     local function fire(name, ...)
-        local r = remote(name); if not r then return false end
-        local ok = pcall(function()
-            if r:IsA("RemoteEvent") then r:FireServer(...)
-            elseif r:IsA("RemoteFunction") then r:InvokeServer(...) end
-        end)
+        local r = remote(name)
+        if not r then return false end
+        local ok = pcall(function(...)
+            if r:IsA("RemoteEvent") then
+                r:FireServer(...)
+            elseif r:IsA("RemoteFunction") then
+                r:InvokeServer(...)
+            end
+        end, ...)
         return ok
     end
+
     local function invoke(name, ...)
-        local r = remote(name); if not r then return nil end
-        local ok, res = pcall(function()
-            if r:IsA("RemoteFunction") then return r:InvokeServer(...)
-            elseif r:IsA("RemoteEvent") then return r:FireServer(...) end
-        end)
+        local r = remote(name)
+        if not r then return nil end
+        local ok, res = pcall(function(...)
+            if r:IsA("RemoteFunction") then
+                return r:InvokeServer(...)
+            elseif r:IsA("RemoteEvent") then
+                return r:FireServer(...)
+            end
+        end, ...)
         return ok and res or nil
     end
 
