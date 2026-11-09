@@ -15,8 +15,8 @@ local FILES = {
 local WINDUI_URLS = {
     "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua",
     "https://github.com/Footagesus/WindUI/releases/download/1.6.50/main.lua",
-    "https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua",
     "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+    "https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua",
 }
 
 local WindUI
@@ -76,10 +76,8 @@ for _, name in ipairs(FILES) do
         end
         res = call_res
     end
-    if type(res) == "table" then
-        for k, v in pairs(res) do Hub[k] = v end
-    end
+    if type(res) == "table" then for k, v in pairs(res) do Hub[k] = v end end
     print("[hub] loaded " .. name)
 end
 
-WindUI:Notify({ Title = "BF Hub", Content = "Loaded", Icon = "check-circle", Duration = 4 })
+WindUI:Notify({ Title = "KUZUNOHA", Content = "Loaded", Icon = "check-circle", Duration = 4 })
