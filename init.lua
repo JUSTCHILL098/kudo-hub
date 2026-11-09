@@ -4,7 +4,7 @@
 local BASE = "https://raw.githubusercontent.com/JUSTCHILL098/kudo-hub/refs/heads/main/src/"
 
 local FILES = {
-    "01-config.lua",
+    "a.lua",
     "02-themes.lua",
     "03-esp.lua",
     "04-farm.lua",
