@@ -41,6 +41,12 @@ for _, url in ipairs(WINDUI_URLS) do
     if WindUI then break end
 end
 
+if type(WindUI) ~= "table" then
+    warn("[hub] all WindUI sources failed")
+    return
+end
+WindUI:SetNotificationLower(true)
+
 local Hub = { WindUI = WindUI, version = "1.6.66", started_at = os.time() }
 getgenv().BFHub = Hub
 
@@ -62,7 +68,17 @@ for _, name in ipairs(FILES) do
         warn("[hub] RUNTIME ERROR " .. name .. ": " .. tostring(res))
         return
     end
-    if type(res) == "table" then for k, v in pairs(res) do Hub[k] = v end end
+    if type(res) == "function" then
+        local call_ok, call_res = pcall(res, Hub)
+        if not call_ok then
+            warn("[hub] RUNTIME ERROR (invoke) " .. name .. ": " .. tostring(call_res))
+            return
+        end
+        res = call_res
+    end
+    if type(res) == "table" then
+        for k, v in pairs(res) do Hub[k] = v end
+    end
     print("[hub] loaded " .. name)
 end
 
