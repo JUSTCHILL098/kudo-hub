@@ -1,9 +1,7 @@
 -- language: Lua, file: 05-teleport.lua
--- island / manual / NPC teleport. find by name across workspace.
 return function(Hub)
     local Workspace = Hub.Workspace
     local hrp = Hub.hrp
-    local CFG = Hub.CFG
 
     local function tp_to_pos(pos)
         local r = hrp(); if not r then return false end
