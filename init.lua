@@ -13,10 +13,10 @@ local FILES = {
 }
 
 local WINDUI_URLS = {
-    "https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua",
-    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
     "https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua",
     "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua",
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+    "https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua",
 }
 
 local WindUI
