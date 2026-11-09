@@ -1,7 +1,5 @@
 -- language: Lua, file: init.lua
--- top-level loader for JUSTCHILL098/kudo-hub. fetches src files in order.
-
-local BASE = "https://raw.githubusercontent.com/JUSTCHILL098/kudo-hub/refs/heads/main/src/"
+local BASE = "https://raw.githubusercontent.com/JUSTCHILL098/kudo-hub/main/src/"
 
 local FILES = {
     "a.lua",
@@ -14,60 +12,36 @@ local FILES = {
     "08-settings-about.lua",
 }
 
-local WindUI_Version = "1.6.66"
-
-local ok_wind, WindUI = pcall(function()
-    return loadstring(game:HttpGet(
-        "https://github.com/Footagesus/WindUI/releases/download/" ..
-        WindUI_Version .. "/main.lua"
-    ))()
-end)
-if not ok_wind or type(WindUI) ~= "table" then
-    warn("[hub] WindUI failed: "..tostring(WindUI))
-    return
-end
+local WindUI = loadstring(game:HttpGet(
+    "https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua"
+))()
+if type(WindUI) ~= "table" then warn("[hub] WindUI failed"); return end
 WindUI:SetNotificationLower(true)
 
-local Hub = {
-    WindUI = WindUI,
-    version = WindUI_Version,
-    started_at = os.time(),
-}
+local Hub = { WindUI = WindUI, version = "1.6.66", started_at = os.time() }
 getgenv().BFHub = Hub
 
-local failed = false
+local t = tostring(os.time())
 for _, name in ipairs(FILES) do
-    local url = BASE .. name
-    local body_ok, body = pcall(game.HttpGet, game, url, true)
-    if not body_ok or type(body) ~= "string" or #body < 50 then
-        warn(string.format("[hub] FETCH FAILED %s | url=%s | got=%s (%s bytes)",
-            name, url, type(body), body and #body or "nil"))
-        failed = true
-        break
+    local url = BASE .. name .. "?t=" .. t
+    local ok, body = pcall(game.HttpGet, game, url, true)
+    if not ok or type(body) ~= "string" or #body < 50 then
+        warn(string.format("[hub] FETCH FAILED %s | url=%s | %s bytes",
+            name, url, body and #body or "nil"))
+        return
     end
-    local chunk, err = loadstring(body, "="..name)
+    local chunk, err = loadstring(body, "=" .. name)
     if not chunk then
-        warn("[hub] COMPILE FAILED "..name..": "..tostring(err))
-        failed = true
-        break
+        warn("[hub] COMPILE FAILED " .. name .. ": " .. tostring(err))
+        return
     end
-    local run_ok, result = pcall(chunk, Hub)
+    local run_ok, res = pcall(chunk, Hub)
     if not run_ok then
-        warn("[hub] RUNTIME ERROR "..name..": "..tostring(result))
-        failed = true
-        break
+        warn("[hub] RUNTIME ERROR " .. name .. ": " .. tostring(res))
+        return
     end
-    if type(result) == "table" then
-        for k, v in pairs(result) do Hub[k] = v end
-    end
-    print("[hub] loaded "..name)
+    if type(res) == "table" then for k, v in pairs(res) do Hub[k] = v end end
+    print("[hub] loaded " .. name)
 end
 
-if not failed then
-    WindUI:Notify({
-        Title = "BF Hub",
-        Content = "Loaded ("..#FILES.." modules)",
-        Icon = "check-circle",
-        Duration = 4,
-    })
-end
+WindUI:Notify({ Title = "BF Hub", Content = "Loaded", Icon = "check-circle", Duration = 4 })
