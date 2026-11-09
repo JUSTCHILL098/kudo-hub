@@ -21,30 +21,25 @@ local WINDUI_URLS = {
 
 local WindUI
 for _, url in ipairs(WINDUI_URLS) do
-    for attempt = 1, 2 do
+    for attempt = 1, 3 do
         local ok, body = pcall(game.HttpGet, game, url, true)
         if ok and type(body) == "string" and #body > 5000 then
             local chunk = loadstring(body, "=WindUI")
             if chunk then
                 local run_ok, lib = pcall(chunk)
-                if run_ok and type(lib) == "table" then
+                if run_ok and type(lib) == "table" and type(lib.CreateWindow) == "function" then
                     WindUI = lib
-                    print("[hub] WindUI OK: " .. url)
+                    print("[hub] WindUI OK ("..attempt.."): "..url)
                     break
                 end
             end
         end
         if WindUI then break end
-        warn("[hub] WindUI attempt failed: " .. url)
+        warn("[hub] WindUI attempt "..attempt.." failed: "..url)
+        task.wait(1)
     end
     if WindUI then break end
 end
-
-if type(WindUI) ~= "table" then
-    warn("[hub] all WindUI sources failed")
-    return
-end
-WindUI:SetNotificationLower(true)
 
 local Hub = { WindUI = WindUI, version = "1.6.66", started_at = os.time() }
 getgenv().BFHub = Hub
