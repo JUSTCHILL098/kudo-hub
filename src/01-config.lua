@@ -34,26 +34,28 @@ return function(Hub)
     local function fire(name, ...)
         local r = remote(name)
         if not r then return false end
-        local ok = pcall(function(...)
+        local args = { ... }
+        local ok = pcall(function()
             if r:IsA("RemoteEvent") then
-                r:FireServer(...)
+                r:FireServer(table.unpack(args))
             elseif r:IsA("RemoteFunction") then
-                r:InvokeServer(...)
+                r:InvokeServer(table.unpack(args))
             end
-        end, ...)
+        end)
         return ok
     end
 
     local function invoke(name, ...)
         local r = remote(name)
         if not r then return nil end
-        local ok, res = pcall(function(...)
+        local args = { ... }
+        local ok, res = pcall(function()
             if r:IsA("RemoteFunction") then
-                return r:InvokeServer(...)
+                return r:InvokeServer(table.unpack(args))
             elseif r:IsA("RemoteEvent") then
-                return r:FireServer(...)
+                return r:FireServer(table.unpack(args))
             end
-        end, ...)
+        end)
         return ok and res or nil
     end
 
