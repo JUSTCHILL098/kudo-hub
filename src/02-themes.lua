@@ -1,0 +1,103 @@
+-- language: Lua, file: 02-themes.lua
+-- registers all 18 themes from the WindUI theme file + the Custom Gray example.
+-- subsequent UI tab uses Hub.THEMES as the dropdown source.
+return function(Hub)
+    local WindUI = Hub.WindUI
+    local THEMES = {
+        "Dark", "Light", "Rose", "Plant", "Red", "Indigo", "Sky",
+        "Violet", "Amber", "Emerald", "Midnight", "Crimson",
+        "Monokai Pro", "Cotton Candy", "Mellowsi", "Rainbow",
+    }
+
+    -- custom theme from the WindUI:AddTheme file — safe pcall, doesn't crash if a key changes
+    pcall(function()
+        WindUI:AddTheme({
+            Name = "Custom Gray",
+            Primary = Color3.fromHex("#a1a1aa"),
+            White = Color3.new(1,1,1),
+            Black = Color3.new(0,0,0),
+            Dialog = Color3.fromHex("#18181b"),
+            Background = Color3.fromHex("#101010"),
+            BackgroundTransparency = 0,
+            Hover = Color3.fromHex("#FFFFFF"),
+            PanelBackground = Color3.new(1,1,1),
+            PanelBackgroundTransparency = 0.95,
+            WindowBackground = Color3.fromHex("#101010"),
+            WindowShadow = Color3.new(0,0,0),
+            WindowTopbarTitle = Color3.fromHex("#FFFFFF"),
+            WindowTopbarAuthor = Color3.fromHex("#FFFFFF"),
+            WindowTopbarIcon = Color3.fromHex("#a1a1aa"),
+            WindowTopbarButtonIcon = Color3.fromHex("#a1a1aa"),
+            WindowSearchBarBackground = Color3.fromHex("#101010"),
+            TabBackground = Color3.fromHex("#FFFFFF"),
+            TabBackgroundHover = Color3.fromHex("#FFFFFF"),
+            TabBackgroundHoverTransparency = 0.97,
+            TabBackgroundActive = Color3.fromHex("#FFFFFF"),
+            TabBackgroundActiveTransparency = 0.93,
+            TabText = Color3.fromHex("#FFFFFF"),
+            TabTextTransparency = 0.3,
+            TabTextTransparencyActive = 0,
+            TabTitle = Color3.fromHex("#FFFFFF"),
+            TabIcon = Color3.fromHex("#a1a1aa"),
+            TabIconTransparency = 0.4,
+            TabIconTransparencyActive = 0.1,
+            TabBorderTransparency = 1,
+            TabBorderTransparencyActive = 0.75,
+            TabBorder = Color3.new(1,1,1),
+            ElementBackground = Color3.fromHex("#FFFFFF"),
+            ElementBackgroundTransparency = 0.93,
+            ElementTitle = Color3.fromHex("#FFFFFF"),
+            ElementDesc = Color3.fromHex("#FFFFFF"),
+            ElementIcon = Color3.fromHex("#a1a1aa"),
+            PopupBackground = Color3.fromHex("#101010"),
+            PopupTitle = Color3.fromHex("#FFFFFF"),
+            PopupContent = Color3.fromHex("#FFFFFF"),
+            PopupIcon = Color3.fromHex("#a1a1aa"),
+            DialogBackground = Color3.fromHex("#101010"),
+            DialogTitle = Color3.fromHex("#FFFFFF"),
+            DialogContent = Color3.fromHex("#FFFFFF"),
+            DialogIcon = Color3.fromHex("#a1a1aa"),
+            Toggle = Color3.fromHex("#52525b"),
+            ToggleBar = Color3.new(1,1,1),
+            Checkbox = Color3.fromHex("#0091FF"),
+            CheckboxIcon = Color3.new(1,1,1),
+            CheckboxBorder = Color3.new(1,1,1),
+            CheckboxBorderTransparency = 0.75,
+            SliderIcon = Color3.fromHex("#a1a1aa"),
+            Slider = Color3.fromHex("#0091FF"),
+            SliderThumb = Color3.new(1,1,1),
+            SliderIconFrom = Color3.fromHex("#a1a1aa"),
+            SliderIconTo = Color3.fromHex("#a1a1aa"),
+            Tooltip = Color3.fromHex("#4C4C4C"),
+            TooltipText = Color3.new(1,1,1),
+            TooltipSecondary = Color3.fromHex("#0091FF"),
+            TooltipSecondaryText = Color3.new(1,1,1),
+            TabSectionIcon = Color3.fromHex("#a1a1aa"),
+            SectionIcon = Color3.fromHex("#a1a1aa"),
+            SectionExpandIcon = Color3.new(1,1,1),
+            SectionExpandIconTransparency = 0.4,
+            SectionBox = Color3.new(1,1,1),
+            SectionBoxTransparency = 0.95,
+            SectionBoxBorder = Color3.new(1,1,1),
+            SectionBoxBorderTransparency = 0.75,
+            SectionBoxBackground = Color3.new(1,1,1),
+            SectionBoxBackgroundTransparency = 0.95,
+            SearchBarBorder = Color3.new(1,1,1),
+            SearchBarBorderTransparency = 0.75,
+            Notification = Color3.fromHex("#101010"),
+            NotificationTitle = Color3.fromHex("#FFFFFF"),
+            NotificationContent = Color3.fromHex("#FFFFFF"),
+            NotificationContentTransparency = 0.4,
+            NotificationBorder = Color3.new(1,1,1),
+            NotificationBorderTransparency = 0.75,
+            DropdownTabBorder = Color3.new(1,1,1),
+            LabelBackground = Color3.new(1,1,1),
+            LabelBackgroundTransparency = 0.95,
+        })
+        table.insert(THEMES, "Custom Gray")
+    end)
+
+    Hub.THEMES = THEMES
+    Hub.current_theme = "Dark"
+    return Hub
+end
