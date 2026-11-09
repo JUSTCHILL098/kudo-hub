@@ -1,5 +1,4 @@
 -- language: Lua, file: 06-misc.lua
--- FPS unlock, low graphics, GUI hide, minimap toggle, live status, redeem codes.
 return function(Hub)
     local LP = Hub.LP
     local CFG = Hub.CFG
@@ -19,25 +18,20 @@ return function(Hub)
             pcall(function()
                 settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
                 for _, v in ipairs(Hub.Workspace:GetDescendants()) do
-                    if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") then
-                        v.Enabled = false
-                    end
+                    if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") then v.Enabled = false end
                 end
             end)
         else
-            pcall(function()
-                settings().Rendering.QualityLevel = Enum.QualityLevel.Level10
-            end)
+            pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level10 end)
         end
     end
 
     local function hide_gui(on)
         CFG.misc.hide_gui = on
         pcall(function()
-            local pg = LP:FindFirstChild("PlayerGui")
-            if not pg then return end
+            local pg = LP:FindFirstChild("PlayerGui"); if not pg then return end
             for _, g in ipairs(pg:GetChildren()) do
-                if g:IsA("ScreenGui") and g.Name ~= "WindUI" then
+                if g:IsA("ScreenGui") and g.Name ~= "WindUI" and not g.Name:find("Kuzu") then
                     g.Enabled = not on
                 end
             end
@@ -53,19 +47,15 @@ return function(Hub)
     end
 
     local function live_status()
-        local root = hrp()
-        local h = hum()
+        local root = hrp(); local h = hum()
         local players = #Hub.Players:GetPlayers()
         local server = game.JobId ~= "" and game.JobId:sub(1, 8) or "solo"
-        return string.format(
-            "HP %d/%d | %d players | server %s | pos %d,%d,%d",
-            h and math.floor(h.Health) or 0,
-            h and math.floor(h.MaxHealth) or 0,
+        return string.format("HP %d/%d | %d players | server %s | pos %d,%d,%d",
+            h and math.floor(h.Health) or 0, h and math.floor(h.MaxHealth) or 0,
             players, server,
             root and math.floor(root.Position.X) or 0,
             root and math.floor(root.Position.Y) or 0,
-            root and math.floor(root.Position.Z) or 0
-        )
+            root and math.floor(root.Position.Z) or 0)
     end
 
     local function redeem(code)
