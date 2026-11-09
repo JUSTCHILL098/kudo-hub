@@ -1,5 +1,5 @@
 -- language: Lua, file: 04-farm.lua
--- farm uses Activated:FireServer path. forced equip on first tick.
+-- farm uses Activated:FireServer path. forced equip on first tick. respawn watchdog.
 return function(Hub)
     local CFG = Hub.CFG
     local LP = Hub.LP
@@ -11,6 +11,7 @@ return function(Hub)
     local hum = Hub.hum
     local alive = Hub.alive
     local fire = Hub.fire
+    local remote = Hub.remote
 
     local function nearest_mob(radius)
         local root = hrp(); if not root then return nil end
@@ -20,10 +21,8 @@ return function(Hub)
                 local h = obj:FindFirstChildOfClass("Humanoid")
                 local r = obj:FindFirstChild("HumanoidRootPart")
                 if h and h.Health > 0 and r and obj ~= LP.Character then
-                    if not obj:FindFirstChildOfClass("Player") then
-                        local d = (r.Position - root.Position).Magnitude
-                        if d < bd then best, bd = obj, d end
-                    end
+                    local d = (r.Position - root.Position).Magnitude
+                    if d < bd then best, bd = obj, d end
                 end
             end
         end
@@ -34,35 +33,21 @@ return function(Hub)
         local h = hum(); if h then h:MoveTo(pos) end
     end
 
-    local function get_equipped_tool()
-        local c = LP.Character; if not c then return nil end
-        return c:FindFirstChildOfClass("Tool")
-    end
-
     local function try_attack()
         local c = LP.Character; if not c then return end
         local tool = c:FindFirstChildOfClass("Tool")
-        if not tool then
-            Hub.equip_saber()
-            return
-        end
+        if not tool then Hub.equip_saber(); return end
         local now = os.clock()
         if now - CFG.last.attack < CFG.farm.attack_ms / 1000 then return end
         CFG.last.attack = now
-        local fired = false
         local act = tool:FindFirstChild("Activated")
         if act and act:IsA("RemoteEvent") then
             pcall(function() act:FireServer() end)
-            fired = true
-        end
-        if not fired then
-            local remote = Hub.remote("CommF_")
-            if remote then
-                if remote:IsA("RemoteFunction") then
-                    pcall(function() remote:InvokeServer("Attack") end)
-                elseif remote:IsA("RemoteEvent") then
-                    pcall(function() remote:FireServer("Attack") end)
-                end
+        else
+            local r = remote("CommF_")
+            if r then
+                if r:IsA("RemoteFunction") then pcall(function() r:InvokeServer("Attack") end)
+                elseif r:IsA("RemoteEvent") then pcall(function() r:FireServer("Attack") end) end
             end
         end
         pcall(function() tool:Activate() end)
@@ -78,8 +63,7 @@ return function(Hub)
         local bp = LP:FindFirstChild("Backpack"); if not bp then return end
         for _, t in ipairs(bp:GetChildren()) do
             if t:IsA("Tool") and t.Name == "Saber" then
-                pcall(function() hum():EquipTool(t) end)
-                return
+                pcall(function() hum():EquipTool(t) end); return
             end
         end
     end
@@ -90,13 +74,10 @@ return function(Hub)
         local now = os.clock()
         if now - CFG.last.aura < interval then return end
         CFG.last.aura = now
-        local remote = Hub.remote("CommF_")
-        if remote then
-            if remote:IsA("RemoteFunction") then
-                pcall(function() remote:InvokeServer("Attack", CFG.aura.radius) end)
-            elseif remote:IsA("RemoteEvent") then
-                pcall(function() remote:FireServer("Attack", CFG.aura.radius) end)
-            end
+        local r = remote("CommF_")
+        if r then
+            if r:IsA("RemoteFunction") then pcall(function() r:InvokeServer("Attack", CFG.aura.radius) end)
+            elseif r:IsA("RemoteEvent") then pcall(function() r:FireServer("Attack", CFG.aura.radius) end) end
         end
     end
 
