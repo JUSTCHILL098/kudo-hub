@@ -1,6 +1,5 @@
 -- language: Lua, file: 04-farm.lua
--- farm suite. Activated:FireServer path. forced equip on first tick. respawn watchdog.
--- fly_to replaces walk. quest accept fires CommF_ StartQuest.
+-- farm suite. aura independent ticker. air-hold on fly. quest by active mob first.
 return function(Hub)
     local CFG       = Hub.CFG
     local LP        = Hub.LP
@@ -31,7 +30,7 @@ return function(Hub)
         },
         aura  = { on=false, rate=8, radius=40 },
         bring = { on=false, radius=200, speed=120 },
-        quest = { on=false, mode="Quest" },
+        quest = { on=false, mode="Quest", mob="" },
         boss  = { on=false, name="" },
         chest = { on=false, hop=false, hop_count=10, stop_on_chalice=true, collected=0 },
         sea   = { on=false, target="SeaBeast", protect_boat=true },
@@ -43,47 +42,77 @@ return function(Hub)
     end
 
     ----------------------------------------------------------------------------
-    -- movement
+    -- AIR-HOLD: pin the root while flying, release only on land
+    -- BodyVelocity + Zero-G on every part = cannot fall between steps, cannot
+    -- be pulled down by mob hits or physics ragdoll.
     ----------------------------------------------------------------------------
+
+    local air_bv = nil
+
+    local function air_lock(on, target_pos)
+        local root = hrp(); if not root then return end
+        if on then
+            if not air_bv or not air_bv.Parent then
+                air_bv = Instance.new("BodyVelocity")
+                air_bv.Name = "KUZ_AirHold"
+                air_bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                air_bv.P = 25000
+                air_bv.Velocity = Vector3.zero
+                air_bv.Parent = root
+            end
+            if target_pos then
+                air_bv.Velocity = (target_pos - root.Position) * 12
+            end
+            for _, part in ipairs(LP.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    pcall(function() part.CanCollide = false end)
+                end
+            end
+        else
+            if air_bv and air_bv.Parent then
+                pcall(function() air_bv:Destroy() end)
+            end
+            air_bv = nil
+            for _, part in ipairs(LP.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    pcall(function() part.CanCollide = true end)
+                end
+            end
+        end
+    end
 
     local function fly_to(pos, opt)
         opt = opt or {}
         local root = hrp(); if not root then return end
         local h = hum(); if not h then return end
-        local delta = pos - root.Position
-        local d = delta.Magnitude
+        local d = (pos - root.Position).Magnitude
         if d < (opt.arrive or 15) then return end
+
         local prev_ws = h.WalkSpeed
+        local prev_jp = h.JumpPower
         h.WalkSpeed = 0
         h.JumpPower = 0
-        for _, part in ipairs(LP.Character:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
-                part.CanCollide = false
-            end
-        end
-        local steps = math.clamp(math.floor(d / (opt.step or 40)), 1, 20)
-        local step_vec = delta / steps
-        for _ = 1, steps do
+        air_lock(true, pos)
+
+        local steps = math.clamp(math.floor(d / (opt.step or 30)), 1, 30)
+        for i = 1, steps do
             local r = hrp(); if not r then break end
-            pcall(function() r.CFrame = CFrame.new(r.Position + step_vec) end)
+            local delta = (pos - r.Position) / (steps - i + 1)
+            pcall(function() r.CFrame = CFrame.new(r.Position + delta) end)
+            if air_bv and air_bv.Parent then
+                pcall(function() air_bv.Velocity = delta.Unit * math.min(d, 250) end)
+            end
             task.wait(0.02)
         end
-        pcall(function() root.CFrame = CFrame.new(pos) end)
-        task.wait(0.03)
-        for _, part in ipairs(LP.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                pcall(function() part.CanCollide = true end)
-            end
-        end
-        h.WalkSpeed = prev_ws
-    end
+        task.wait(0.05)
+        air_lock(false)
 
-    local function walk_to(pos)
-        local h = hum(); if h then h:MoveTo(pos) end
+        local h2 = hum()
+        if h2 then h2.WalkSpeed = prev_ws; h2.JumpPower = prev_jp end
     end
 
     ----------------------------------------------------------------------------
-    -- targeting
+    -- target utils
     ----------------------------------------------------------------------------
 
     local function is_player_char(m)
@@ -169,7 +198,7 @@ return function(Hub)
     end
 
     ----------------------------------------------------------------------------
-    -- aura / bring / hop
+    -- aura / bring / hop — independent tickers
     ----------------------------------------------------------------------------
 
     local function kill_aura_tick()
@@ -226,7 +255,7 @@ return function(Hub)
     end
 
     ----------------------------------------------------------------------------
-    -- quest helpers
+    -- quest
     ----------------------------------------------------------------------------
 
     local function quest_gui_title()
@@ -250,13 +279,17 @@ return function(Hub)
         return quest_gui_title() ~= nil
     end
 
-    local function find_quest_npc()
+    -- choose NPC whose NAME matches the quest topic, not first-hunter-by-name
+    local function find_quest_npc_for_mob(mob_name)
         local root = hrp(); if not root then return nil end
-        local best, bd = nil, 500
+        if not mob_name or mob_name == "" then return nil end
+        local low = mob_name:lower()
+        local best, bd = nil, 5000
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj:IsA("Model") then
                 local n = obj.Name:lower()
-                if n:find("quest") or n:find("giver") or n:find("hunter") then
+                -- NPC name usually contains the mob name or the island it lives on
+                if n:find(low, 1, true) or n:find("quest", 1, true) then
                     local r = obj:FindFirstChild("HumanoidRootPart")
                         or obj.PrimaryPart
                         or obj:FindFirstChildWhichIsA("BasePart", true)
@@ -270,12 +303,40 @@ return function(Hub)
         return best
     end
 
-    local function quest_accept_for_npc()
+    -- hardcoded level-1 fallback NPCs — prevents "chose a random quest"
+    -- these are the safe starters across sea 1/2/3
+    local STARTER_NPCS = {
+        {name = "BanditQuest",      pos = Vector3.new(1059, 14, 1546)},
+        {name = "JungleQuest",      pos = Vector3.new(-1601, 36, 153)},
+        {name = "MarineQuest2",     pos = Vector3.new(-5554, 313, -2961)},
+    }
+
+    local function find_starter_npc()
+        local root = hrp(); if not root then return nil end
+        for _, s in ipairs(STARTER_NPCS) do
+            local d = (s.pos - root.Position).Magnitude
+            if d < 5000 then return s.pos end
+        end
+        -- fallback: nearest model whose name contains "Quest"
+        local best, bd = nil, 5000
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj.Name:lower():find("quest", 1, true) then
+                local r = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
+                if r and r.Parent then
+                    local d = (r.Position - root.Position).Magnitude
+                    if d < bd then best, bd = r.Position, d end
+                end
+            end
+        end
+        return best
+    end
+
+    local function quest_accept()
         local r = remote("CommF_")
         if not r then return false end
         if r:IsA("RemoteFunction") then
-            local ok = pcall(function() return r:InvokeServer("StartQuest") end)
-            return ok
+            pcall(function() r:InvokeServer("StartQuest") end)
+            return true
         elseif r:IsA("RemoteEvent") then
             pcall(function() r:FireServer("StartQuest") end)
             return true
@@ -283,22 +344,26 @@ return function(Hub)
         return false
     end
 
+    -- if quest already active, only kill the named mob; do NOT re-pick
     local function quest_tick()
         if not CFG.quest.on then return end
         local mode = CFG.quest.mode or "Quest"
         local mob_name
 
         if mode == "Quest" then
-            if not has_active_quest() then
-                local npc_pos = find_quest_npc()
-                if npc_pos then
-                    fly_to(npc_pos, { arrive = 12 })
-                    quest_accept_for_npc()
-                    task.wait(0.5)
+            if has_active_quest() then
+                mob_name = active_quest_mob()
+                if mob_name then CFG.quest.mob = mob_name end
+            else
+                -- no quest active: fly to starter NPC, accept
+                local npc = find_quest_npc_for_mob(CFG.quest.mob) or find_starter_npc()
+                if npc then
+                    fly_to(npc, { arrive = 10, step = 30 })
+                    quest_accept()
+                    task.wait(0.6)
                 end
                 return
             end
-            mob_name = active_quest_mob()
         elseif mode == "NoQuest" then
             mob_name = nil
         elseif mode == "Nearest" then
@@ -314,7 +379,7 @@ return function(Hub)
         end
 
         local filter
-        if mob_name then
+        if mob_name and mob_name ~= "" then
             local lower = mob_name:lower()
             filter = function(obj) return obj.Name:lower():find(lower, 1, true) ~= nil end
         end
@@ -365,9 +430,7 @@ return function(Hub)
         local part, d = detect_chest()
         if part then
             if d > 8 then fly_to(part.Position + Vector3.new(0, 3, 2), { arrive = 6 }) end
-            CFG.chest.collected = (CFG.chest.collected or 0)
         elseif CFG.chest.hop then
-            CFG.chest.collected = 0
             hop_tick()
         end
     end
@@ -380,13 +443,7 @@ return function(Hub)
         local sb = sea_beasts_folder()
         if sb then
             for _, m in ipairs(sb:GetChildren()) do
-                if is_alive_model(m) then return m, "SeaBeast" end
-            end
-        end
-        local enemies = Workspace:FindFirstChild("Enemies")
-        if enemies then
-            for _, m in ipairs(enemies:GetChildren()) do
-                if is_alive_model(m) and m:GetAttribute("IsBoat") then return m, "Boat" end
+                if is_alive_model(m) then return m end
             end
         end
         return nil
@@ -394,7 +451,7 @@ return function(Hub)
 
     local function sea_tick()
         if not CFG.sea.on then return end
-        local tgt, kind = sea_event_target()
+        local tgt = sea_event_target()
         if not tgt then return end
         local mr = tgt:FindFirstChild("HumanoidRootPart") or tgt.PrimaryPart
         if not mr then return end
@@ -411,14 +468,21 @@ return function(Hub)
     -- lifecycle
     ----------------------------------------------------------------------------
 
-    local function spawn_ticker(fn, interval)
-        task.spawn(function()
-            while not CFG.farm.stop do
-                pcall(fn)
-                task.wait(interval or 0.1)
-            end
-        end)
-    end
+    -- AURA TICKER: always running, no dependency on farm_start
+    task.spawn(function()
+        while true do
+            pcall(kill_aura_tick)
+            task.wait(0.05)
+        end
+    end)
+
+    -- BRING TICKER: always running, no dependency on farm_start
+    task.spawn(function()
+        while true do
+            pcall(bring_tick)
+            task.wait(0.1)
+        end
+    end)
 
     local function start()
         if CFG.farm.on then return end
@@ -460,10 +524,12 @@ return function(Hub)
             CFG.farm.on = false
         end)
 
-        spawn_ticker(kill_aura_tick, 0.1)
-        spawn_ticker(bring_tick,     0.1)
-        spawn_ticker(chest_tick,     0.1)
-        spawn_ticker(function() task.wait(60); hop_tick() end, 1)
+        task.spawn(function()
+            while not CFG.farm.stop do
+                task.wait(60)
+                pcall(hop_tick)
+            end
+        end)
     end
 
     local function stop()
@@ -473,13 +539,7 @@ return function(Hub)
         CFG.boss.on  = false
         CFG.chest.on = false
         CFG.sea.on   = false
-        CFG.aura.on  = false
-        CFG.bring.on = false
     end
-
-    ----------------------------------------------------------------------------
-    -- public surface
-    ----------------------------------------------------------------------------
 
     Hub.farm_start     = start
     Hub.farm_stop      = stop
@@ -489,7 +549,6 @@ return function(Hub)
     Hub.all_mobs       = all_mobs
     Hub.fly_to         = fly_to
     Hub.shove_to       = fly_to
-    Hub.walk_to        = walk_to
     Hub.try_attack     = try_attack
     Hub.start_quest    = function() CFG.quest.on = true end
     Hub.stop_quest     = function() CFG.quest.on = false end
