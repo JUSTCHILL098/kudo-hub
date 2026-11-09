@@ -23,7 +23,7 @@ return function(Hub)
     local MiscTab   = Window:Tab({ Title = "Misc",    Icon = "wrench" })
 
     -- ── Farm ────────────────────────────────────────────────────────────
-    local FarmRun = FarmTab:Section({ Title = "Run", TextXAlignment = Enum.TextXAlignment.Left })
+    local FarmRun = FarmTab:Section({ Title = "Run" })
     FarmRun:Button({ Title = "Start Farm", Icon = "play", Callback = function()
         Hub.farm_start()
         WindUI:Notify({ Title = "Farm", Content = "Started", Icon = "check-circle", Duration = 3 })
@@ -36,7 +36,7 @@ return function(Hub)
         local r = Hub.hrp(); if r then CFG.farm.center = r.Position end
     end})
 
-    local FarmTune = FarmTab:Section({ Title = "Tuning", TextXAlignment = Enum.TextXAlignment.Left, Opened = false })
+    local FarmTune = FarmTab:Section({ Title = "Tuning", Opened = false })
     FarmTune:Slider({ Title = "Attack Interval (ms)", Value = { Min = 100, Max = 400, Default = 150 }, Step = 10, Flag = "attack_ms",
         Callback = function(v) CFG.farm.attack_ms = v end })
     FarmTune:Slider({ Title = "Farm Radius", Value = { Min = 40, Max = 400, Default = 120 }, Step = 10, Flag = "farm_radius",
@@ -53,7 +53,7 @@ return function(Hub)
         Callback = function(v) CFG.farm.hop_sec = v end })
 
     -- ── Combat ──────────────────────────────────────────────────────────
-    local AuraSec = CombatTab:Section({ Title = "Kill Aura (capped 2/s)", TextXAlignment = Enum.TextXAlignment.Left })
+    local AuraSec = CombatTab:Section({ Title = "Kill Aura (capped 2/s)" })
     AuraSec:Toggle({ Title = "Enable Aura", Value = false, Flag = "aura_on",
         Callback = function(v) CFG.aura.on = v end })
     AuraSec:Slider({ Title = "Aura Radius", Value = { Min = 6, Max = 30, Default = 18 }, Step = 1, Flag = "aura_radius",
@@ -61,7 +61,7 @@ return function(Hub)
     AuraSec:Slider({ Title = "Aura Rate (Hz, max 2)", Value = { Min = 1, Max = 2, Default = 2 }, Step = 1, Flag = "aura_rate",
         Callback = function(v) CFG.aura.rate = math.min(v, 2) end })
 
-    local BringSec = CombatTab:Section({ Title = "Bring Mobs (velocity pull)", TextXAlignment = Enum.TextXAlignment.Left })
+    local BringSec = CombatTab:Section({ Title = "Bring Mobs (velocity pull)" })
     BringSec:Toggle({ Title = "Enable Pull", Value = false, Flag = "bring_on",
         Callback = function(v) CFG.bring.on = v end })
     BringSec:Slider({ Title = "Pull Radius", Value = { Min = 10, Max = 80, Default = 40 }, Step = 5, Flag = "bring_radius",
@@ -72,7 +72,7 @@ return function(Hub)
     -- ── ESP ─────────────────────────────────────────────────────────────
     local function add_esp_section(title, key, opts)
         opts = opts or {}
-        local sec = EspTab:Section({ Title = title, TextXAlignment = Enum.TextXAlignment.Left, Opened = false })
+        local sec = EspTab:Section({ Title = title, Opened = false })
         sec:Toggle({ Title = "Enable "..title, Value = CFG.esp[key].on, Flag = "esp_"..key,
             Callback = function(v) CFG.esp[key].on = v; if not v then Hub.esp_clear(key) end end })
         sec:Slider({ Title = "Distance", Value = { Min = 100, Max = 5000, Default = CFG.esp[key].dist }, Step = 100,
@@ -108,7 +108,7 @@ return function(Hub)
     end})
 
     -- ── Teleport ────────────────────────────────────────────────────────
-    local TeleManual = TeleTab:Section({ Title = "Manual Movement", TextXAlignment = Enum.TextXAlignment.Left })
+    local TeleManual = TeleTab:Section({ Title = "Manual Movement" })
     local function step(v) Hub.manual_step(v) end
     TeleManual:Button({ Title = "↑ Forward",  Callback = function() step(Vector3.new(0,0,-20))  end })
     TeleManual:Button({ Title = "↓ Back",     Callback = function() step(Vector3.new(0,0, 20))  end })
@@ -117,7 +117,7 @@ return function(Hub)
     TeleManual:Button({ Title = "↑ Up",       Callback = function() step(Vector3.new(0,20,0))   end })
     TeleManual:Button({ Title = "↓ Down",     Callback = function() step(Vector3.new(0,-20,0))  end })
 
-    local TeleIsl = TeleTab:Section({ Title = "Island Anchors", TextXAlignment = Enum.TextXAlignment.Left, Opened = true })
+    local TeleIsl = TeleTab:Section({ Title = "Island Anchors", Opened = true })
     local ISLANDS = {
         "Kingdom of Rose", "Cursed Ship", "Ice Castle", "Forgotten Island", "Green Zone",
         "Graveyard", "Snow Mountain", "Hot and Cold", "Port Town", "Great Tree",
@@ -138,7 +138,7 @@ return function(Hub)
         end })
     end
 
-    local TeleNpc = TeleTab:Section({ Title = "NPC / Custom Teleport", TextXAlignment = Enum.TextXAlignment.Left, Opened = false })
+    local TeleNpc = TeleTab:Section({ Title = "NPC / Custom Teleport", Opened = false })
     local npc_input
     npc_input = TeleNpc:Input({
         Title = "Name",
@@ -168,7 +168,7 @@ return function(Hub)
     end })
 
     -- ── Misc ────────────────────────────────────────────────────────────
-    local MiscSec = MiscTab:Section({ Title = "Client", TextXAlignment = Enum.TextXAlignment.Left })
+    local MiscSec = MiscTab:Section({ Title = "Client" })
     MiscSec:Toggle({ Title = "Unlock FPS", Value = false, Flag = "fps",
         Callback = function(v) Hub.set_fps(v) end })
     MiscSec:Toggle({ Title = "Low Graphics", Value = false, Flag = "low_gfx",
@@ -177,7 +177,7 @@ return function(Hub)
         Callback = function(v) Hub.hide_gui(v) end })
     MiscSec:Button({ Title = "Toggle Minimap", Callback = function() Hub.toggle_minimap() end })
 
-    local RedeemSec = MiscTab:Section({ Title = "Redeem Codes", TextXAlignment = Enum.TextXAlignment.Left, Opened = false })
+    local RedeemSec = MiscTab:Section({ Title = "Redeem Codes", Opened = false })
     local redeem_input
     redeem_input = RedeemSec:Input({
         Title = "Code",
@@ -192,7 +192,7 @@ return function(Hub)
         WindUI:Notify({ Title = "Redeem", Content = "Sent: "..code, Icon = "check-circle", Duration = 3 })
     end })
 
-    local StatusSec = MiscTab:Section({ Title = "Live Status", TextXAlignment = Enum.TextXAlignment.Left })
+    local StatusSec = MiscTab:Section({ Title = "Live Status" })
     local StatusLabel
     StatusLabel = StatusSec:Paragraph({ Title = "Status", Desc = Hub.live_status() })
     task.spawn(function()
