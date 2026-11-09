@@ -1,5 +1,4 @@
--- language: Lua, file: 01-config.lua
--- shared state, services, helper functions. every subsequent file consumes this.
+-- language: Lua, file: a.lua
 return function(Hub)
     local Players            = game:GetService("Players")
     local ReplicatedStorage  = game:GetService("ReplicatedStorage")
@@ -11,50 +10,29 @@ return function(Hub)
 
     local LP = Players.LocalPlayer
 
-    local function hrp()
-        local c = LP.Character
-        return c and c:FindFirstChild("HumanoidRootPart")
-    end
-    local function hum()
-        local c = LP.Character
-        return c and c:FindFirstChildOfClass("Humanoid")
-    end
-    local function alive()
-        local h = hum()
-        return h and h.Health > 0
-    end
+    local function hrp() local c = LP.Character; return c and c:FindFirstChild("HumanoidRootPart") end
+    local function hum() local c = LP.Character; return c and c:FindFirstChildOfClass("Humanoid") end
+    local function alive() local h = hum(); return h and h.Health > 0 end
 
     local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
-
-    local function remote(name)
-        if not Remotes then return nil end
-        return Remotes:FindFirstChild(name)
-    end
+    local function remote(name) if not Remotes then return nil end; return Remotes:FindFirstChild(name) end
 
     local function fire(name, ...)
-        local r = remote(name)
-        if not r then return false end
+        local r = remote(name); if not r then return false end
         local args = { ... }
         local ok = pcall(function()
-            if r:IsA("RemoteEvent") then
-                r:FireServer(table.unpack(args))
-            elseif r:IsA("RemoteFunction") then
-                r:InvokeServer(table.unpack(args))
-            end
+            if r:IsA("RemoteEvent") then r:FireServer(table.unpack(args))
+            elseif r:IsA("RemoteFunction") then r:InvokeServer(table.unpack(args)) end
         end)
         return ok
     end
 
     local function invoke(name, ...)
-        local r = remote(name)
-        if not r then return nil end
+        local r = remote(name); if not r then return nil end
         local args = { ... }
         local ok, res = pcall(function()
-            if r:IsA("RemoteFunction") then
-                return r:InvokeServer(table.unpack(args))
-            elseif r:IsA("RemoteEvent") then
-                return r:FireServer(table.unpack(args))
-            end
+            if r:IsA("RemoteFunction") then return r:InvokeServer(table.unpack(args))
+            elseif r:IsA("RemoteEvent") then return r:FireServer(table.unpack(args)) end
         end)
         return ok and res or nil
     end
@@ -74,11 +52,9 @@ return function(Hub)
         farm = {
             on = false, stop = false,
             center = Vector3.new(0, 60, 0),
-            radius = 120,
-            attack_ms = 150,
+            radius = 120, attack_ms = 150,
             auto_team = true, target_team = "Pirates",
-            auto_hop = false, hop_sec = 120,
-            max_minutes = 60,
+            auto_hop = false, hop_sec = 120, max_minutes = 60,
         },
         aura = { on = false, radius = 18, rate = 2 },
         bring = { on = false, radius = 40, speed = 8 },
