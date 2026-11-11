@@ -1,5 +1,9 @@
--- language: Lua, file: 07-ui.lua
-return function(Hub)
+-- language: Lua, file: src/07-ui.lua
+return (function(Hub)
+    if not Hub or not Hub.WindUI then
+        warn("[BF Hub] 07-ui: Hub or WindUI missing")
+        return Hub
+    end
     local WindUI = Hub.WindUI
     local CFG = Hub.CFG
 
@@ -21,132 +25,112 @@ return function(Hub)
     local TeleTab   = Window:Tab({ Title = "Teleport", Icon = "map-pin", Border = true })
     local MiscTab   = Window:Tab({ Title = "Misc",     Icon = "wrench",  Border = true })
 
-    -- FARM — RUN
+    -- FARM
     local FarmRun = FarmTab:Section({ Title = "Run", Box = true, BoxBorder = true, Opened = true })
     FarmRun:Button({ Title = "Start Farm", Desc = "Start farm loop.", Icon = "play",
-        Callback = function() Hub.farm_start() end })
+        Callback = function() if Hub.farm_start then Hub.farm_start() end end })
     FarmRun:Button({ Title = "Stop Farm", Desc = "Stop loop (aura stays on).", Icon = "square",
-        Callback = function() Hub.farm_stop() end })
+        Callback = function() if Hub.farm_stop then Hub.farm_stop() end end })
     FarmRun:Button({ Title = "Set Anchor Here", Desc = "Current position = farm center.", Icon = "map-pin",
-        Callback = function() local r = Hub.hrp(); if r then CFG.farm.center = r.Position end end })
+        Callback = function() local r = Hub.hrp and Hub.hrp() or nil; if r and CFG.farm then CFG.farm.center = r.Position end end })
 
-    -- FARM — QUEST
     local FarmQuest = FarmTab:Section({ Title = "Quest Farm", Box = true, BoxBorder = true, Opened = true })
-    FarmQuest:Toggle({ Title = "Enable Quest Farm", Desc = "Kill the named quest mob; accept new quest when idle.", Value = false, Flag = "quest_on",
-        Callback = function(v) CFG.quest.on = v end })
-    FarmQuest:Dropdown({ Title = "Mode", Desc = "Quest = named mob. NoQuest = any. Nearest = closest only.",
-        Values = { "Quest", "NoQuest", "Nearest" }, Value = "Quest", Flag = "quest_mode",
-        Callback = function(v) CFG.quest.mode = v end })
+    FarmQuest:Toggle({ Title = "Enable Quest Farm", Desc = "Kill the named quest mob.", Value = false, Flag = "quest_on",
+        Callback = function(v) if CFG.quest then CFG.quest.on = v end end })
+    FarmQuest:Dropdown({ Title = "Mode", Values = { "Quest", "NoQuest", "Nearest" }, Value = "Quest", Flag = "quest_mode",
+        Callback = function(v) if CFG.quest then CFG.quest.mode = v end end })
 
-    -- FARM — BOSS
     local FarmBoss = FarmTab:Section({ Title = "Boss Farm", Box = true, BoxBorder = true, Opened = true })
-    local boss_val = CFG.boss.name or ""
-    FarmBoss:Input({ Title = "Boss Name", Desc = "Partial name. e.g. Cake Prince, Dough King, Greybeard.",
-        Placeholder = "Cake Prince", Value = "",
-        Callback = function(v) boss_val = v or ""; CFG.boss.name = boss_val end })
-    FarmBoss:Toggle({ Title = "Enable Boss Farm", Desc = "Fly to and attack the named boss.", Value = false, Flag = "boss_on",
-        Callback = function(v) CFG.boss.name = boss_val; CFG.boss.on = v end })
+    local boss_val = (CFG.boss and CFG.boss.name) or ""
+    FarmBoss:Input({ Title = "Boss Name", Placeholder = "Cake Prince", Value = "",
+        Callback = function(v) boss_val = v or ""; if CFG.boss then CFG.boss.name = boss_val end end })
+    FarmBoss:Toggle({ Title = "Enable Boss Farm", Value = false, Flag = "boss_on",
+        Callback = function(v) if CFG.boss then CFG.boss.name = boss_val; CFG.boss.on = v end end })
 
-    -- FARM — CHEST
     local FarmChest = FarmTab:Section({ Title = "Chest Farm", Box = true, BoxBorder = true, Opened = true })
-    FarmChest:Toggle({ Title = "Enable Chest Farm", Desc = "Fly to nearest _ChestTagged.", Value = false, Flag = "chest_on",
-        Callback = function(v) CFG.chest.on = v end })
-    FarmChest:Toggle({ Title = "Auto Hop When Empty", Desc = "Hop when no chest found.", Value = false, Flag = "chest_hop",
-        Callback = function(v) CFG.chest.hop = v end })
+    FarmChest:Toggle({ Title = "Enable Chest Farm", Value = false, Flag = "chest_on",
+        Callback = function(v) if CFG.chest then CFG.chest.on = v end end })
+    FarmChest:Toggle({ Title = "Auto Hop When Empty", Value = false, Flag = "chest_hop",
+        Callback = function(v) if CFG.chest then CFG.chest.hop = v end end })
 
-    -- FARM — SEA
     local FarmSea = FarmTab:Section({ Title = "Sea Event Farm", Box = true, BoxBorder = true, Opened = true })
-    FarmSea:Toggle({ Title = "Enable Sea Farm", Desc = "Targets SeaBeasts, flies 200 above water.", Value = false, Flag = "sea_on",
-        Callback = function(v) CFG.sea.on = v end })
+    FarmSea:Toggle({ Title = "Enable Sea Farm", Value = false, Flag = "sea_on",
+        Callback = function(v) if CFG.sea then CFG.sea.on = v end end })
 
-    -- FARM — TUNING
     local FarmTune = FarmTab:Section({ Title = "Tuning", Box = true, BoxBorder = true, Opened = true })
-    FarmTune:Slider({ Title = "Attack Interval (ms)", Desc = "150 safe.", Value = { Min = 100, Max = 400, Default = 150 }, Step = 10, Flag = "attack_ms",
-        Callback = function(v) CFG.farm.attack_ms = v end })
-    FarmTune:Slider({ Title = "Farm Radius", Desc = "Seek distance.", Value = { Min = 40, Max = 400, Default = 120 }, Step = 10, Flag = "farm_radius",
-        Callback = function(v) CFG.farm.radius = v end })
-    FarmTune:Slider({ Title = "Max Runtime (min)", Desc = "Auto-stop after.", Value = { Min = 5, Max = 240, Default = 60 }, Step = 5, Flag = "max_min",
-        Callback = function(v) CFG.farm.max_minutes = v end })
-    FarmTune:Toggle({ Title = "Auto Team", Desc = "Set team on join.", Value = true, Flag = "auto_team",
-        Callback = function(v) CFG.farm.auto_team = v; if v then Hub.set_team() end end })
-    FarmTune:Dropdown({ Title = "Target Team", Desc = "Marines or Pirates.", Values = { "Pirates", "Marines" }, Value = "Pirates", Flag = "team",
-        Callback = function(v) CFG.farm.target_team = v; Hub.set_team() end })
-    FarmTune:Toggle({ Title = "Auto Server Hop", Desc = "Hops on cooldown.", Value = false, Flag = "auto_hop",
-        Callback = function(v) CFG.farm.auto_hop = v end })
-    FarmTune:Slider({ Title = "Hop Cooldown (s)", Desc = "Seconds between hops.", Value = { Min = 60, Max = 600, Default = 120 }, Step = 10, Flag = "hop_sec",
-        Callback = function(v) CFG.farm.hop_sec = v end })
+    FarmTune:Slider({ Title = "Attack Interval (ms)", Value = { Min = 100, Max = 400, Default = 150 }, Step = 10, Flag = "attack_ms",
+        Callback = function(v) if CFG.farm then CFG.farm.attack_ms = v end end })
+    FarmTune:Slider({ Title = "Farm Radius", Value = { Min = 40, Max = 400, Default = 120 }, Step = 10, Flag = "farm_radius",
+        Callback = function(v) if CFG.farm then CFG.farm.radius = v end end })
+    FarmTune:Slider({ Title = "Max Runtime (min)", Value = { Min = 5, Max = 240, Default = 60 }, Step = 5, Flag = "max_min",
+        Callback = function(v) if CFG.farm then CFG.farm.max_minutes = v end end })
+    FarmTune:Toggle({ Title = "Auto Team", Value = true, Flag = "auto_team",
+        Callback = function(v) if CFG.farm then CFG.farm.auto_team = v end; if v and Hub.set_team then Hub.set_team() end end })
+    FarmTune:Dropdown({ Title = "Target Team", Values = { "Pirates", "Marines" }, Value = "Pirates", Flag = "team",
+        Callback = function(v) if CFG.farm then CFG.farm.target_team = v end; if Hub.set_team then Hub.set_team() end end })
+    FarmTune:Toggle({ Title = "Auto Server Hop", Value = false, Flag = "auto_hop",
+        Callback = function(v) if CFG.farm then CFG.farm.auto_hop = v end end })
+    FarmTune:Slider({ Title = "Hop Cooldown (s)", Value = { Min = 60, Max = 600, Default = 120 }, Step = 10, Flag = "hop_sec",
+        Callback = function(v) if CFG.farm then CFG.farm.hop_sec = v end end })
 
-    -- COMBAT — AURA
+    -- COMBAT
     local AuraSec = CombatTab:Section({ Title = "Kill Aura", Box = true, BoxBorder = true, Opened = true })
-    AuraSec:Toggle({ Title = "Enable Aura", Desc = "Independent ticker — runs even without farm.", Value = false, Flag = "aura_on",
-        Callback = function(v) Hub.set_aura(v, CFG.aura.rate, CFG.aura.radius) end })
-    AuraSec:Slider({ Title = "Aura Radius", Desc = "Mobs within this range are hit.", Value = { Min = 6, Max = 80, Default = 40 }, Step = 1, Flag = "aura_radius",
-        Callback = function(v) Hub.set_aura(CFG.aura.on, CFG.aura.rate, v) end })
-    AuraSec:Slider({ Title = "Aura Rate (Hz)", Desc = "Attacks per second.", Value = { Min = 1, Max = 12, Default = 8 }, Step = 1, Flag = "aura_rate",
-        Callback = function(v) Hub.set_aura(CFG.aura.on, v, CFG.aura.radius) end })
+    AuraSec:Toggle({ Title = "Enable Aura", Value = false, Flag = "aura_on",
+        Callback = function(v) if Hub.set_aura then Hub.set_aura(v, CFG.aura.rate, CFG.aura.radius) end end })
+    AuraSec:Slider({ Title = "Aura Radius", Value = { Min = 6, Max = 80, Default = 40 }, Step = 1, Flag = "aura_radius",
+        Callback = function(v) if Hub.set_aura then Hub.set_aura(CFG.aura.on, CFG.aura.rate, v) end end })
+    AuraSec:Slider({ Title = "Aura Rate (Hz)", Value = { Min = 1, Max = 12, Default = 8 }, Step = 1, Flag = "aura_rate",
+        Callback = function(v) if Hub.set_aura then Hub.set_aura(CFG.aura.on, v, CFG.aura.radius) end end })
 
-    -- COMBAT — BRING
     local BringSec = CombatTab:Section({ Title = "Bring Mobs", Box = true, BoxBorder = true, Opened = true })
-    BringSec:Toggle({ Title = "Enable Pull", Desc = "Pulls nearby mobs with velocity.", Value = false, Flag = "bring_on",
-        Callback = function(v) Hub.set_bring(v, CFG.bring.radius, CFG.bring.speed) end })
-    BringSec:Slider({ Title = "Pull Radius", Desc = "Mobs within this range are pulled.", Value = { Min = 20, Max = 500, Default = 200 }, Step = 10, Flag = "bring_radius",
-        Callback = function(v) Hub.set_bring(CFG.bring.on, v, CFG.bring.speed) end })
-    BringSec:Slider({ Title = "Pull Speed", Desc = "Studs per second.", Value = { Min = 4, Max = 400, Default = 120 }, Step = 4, Flag = "bring_speed",
-        Callback = function(v) Hub.set_bring(CFG.bring.on, CFG.bring.radius, v) end })
+    BringSec:Toggle({ Title = "Enable Pull", Value = false, Flag = "bring_on",
+        Callback = function(v) if Hub.set_bring then Hub.set_bring(v, CFG.bring.radius, CFG.bring.speed) end end })
+    BringSec:Slider({ Title = "Pull Radius", Value = { Min = 20, Max = 500, Default = 200 }, Step = 10, Flag = "bring_radius",
+        Callback = function(v) if Hub.set_bring then Hub.set_bring(CFG.bring.on, v, CFG.bring.speed) end end })
+    BringSec:Slider({ Title = "Pull Speed", Value = { Min = 4, Max = 400, Default = 120 }, Step = 4, Flag = "bring_speed",
+        Callback = function(v) if Hub.set_bring then Hub.set_bring(CFG.bring.on, CFG.bring.radius, v) end end })
 
     -- ESP
     local EspStack = EspTab:HStack()
-
     local function build_esp_col(key, title, opts)
         opts = opts or {}
         local col = EspStack:VStack()
         local sec = col:Section({ Title = title, Box = true, BoxBorder = true, Opened = true })
-        sec:Toggle({ Title = "Enable " .. title, Desc = "Draws " .. title:lower() .. ".",
-            Value = CFG.esp[key].on, Flag = "esp_"..key,
-            Callback = function(v) CFG.esp[key].on = v; if not v then Hub.esp_clear(key) end end })
-        sec:Slider({ Title = "Distance", Desc = "Max render distance.", Value = { Min = 100, Max = 5000, Default = CFG.esp[key].dist }, Step = 100,
+        sec:Toggle({ Title = "Enable " .. title, Value = CFG.esp[key] and CFG.esp[key].on or false, Flag = "esp_"..key,
+            Callback = function(v) if CFG.esp[key] then CFG.esp[key].on = v end; if not v and Hub.esp_clear then Hub.esp_clear(key) end end })
+        sec:Slider({ Title = "Distance", Value = { Min = 100, Max = 5000, Default = (CFG.esp[key] and CFG.esp[key].dist) or 1500 }, Step = 100,
             Flag = "esp_"..key.."_dist",
-            Callback = function(v) CFG.esp[key].dist = v end })
-        if opts.color then
-            sec:Colorpicker({ Title = "Color", Desc = "Text color.", Default = CFG.esp[key].color, Flag = "esp_"..key.."_color",
-                Callback = function(c) CFG.esp[key].color = c; Hub.esp_clear(key) end })
-        end
-        if opts.hp then
-            sec:Toggle({ Title = "Show HP", Desc = "Include health.", Value = true, Flag = "esp_"..key.."_hp",
-                Callback = function(v) CFG.esp[key].hp = v end })
-        end
-        if opts.dist_show then
-            sec:Toggle({ Title = "Show Distance", Desc = "Include studs.", Value = true, Flag = "esp_"..key.."_dist_show",
-                Callback = function(v) CFG.esp[key].dist_show = v end })
+            Callback = function(v) if CFG.esp[key] then CFG.esp[key].dist = v end end })
+        if opts.color and CFG.esp[key] then
+            sec:Colorpicker({ Title = "Color", Default = CFG.esp[key].color, Flag = "esp_"..key.."_color",
+                Callback = function(c) CFG.esp[key].color = c; if Hub.esp_clear then Hub.esp_clear(key) end end })
         end
     end
-
-    build_esp_col("players",  "Players",  { color = true, hp = true, dist_show = true })
+    build_esp_col("players",  "Players",  { color = true })
     build_esp_col("islands",  "Islands",  { color = true })
     build_esp_col("fruits",   "Fruits",   { color = true })
     build_esp_col("chests",   "Chests",   { color = true })
     build_esp_col("berries",  "Berries",  { color = true })
     build_esp_col("dealers",  "Dealers",  { color = true })
-    build_esp_col("mobs",     "Mobs",     { color = true, hp = true, dist_show = true })
+    build_esp_col("mobs",     "Mobs",     { color = true })
     build_esp_col("items",    "Items",    { color = true })
     build_esp_col("pumpkins", "Pumpkins", { color = true })
 
     local EspClearSec = EspTab:Section({ Title = "Cleanup", Box = true, BoxBorder = true, Opened = true })
-    EspClearSec:Button({ Title = "Clear All ESP", Desc = "Destroys every active label.", Icon = "eraser",
-        Callback = function() for k in pairs(CFG.esp) do Hub.esp_clear(k) end end })
+    EspClearSec:Button({ Title = "Clear All ESP", Icon = "eraser",
+        Callback = function() if Hub.esp_clear then for k in pairs(CFG.esp) do Hub.esp_clear(k) end end end })
 
     -- TELEPORT
     local TeleManual = TeleTab:Section({ Title = "Manual Movement", Box = true, BoxBorder = true, Opened = true })
-    local function step(v) Hub.manual_step(v) end
-    TeleManual:Button({ Title = "↑ Forward", Callback = function() step(Vector3.new(0, 0, -20)) end })
-    TeleManual:Button({ Title = "↓ Back",    Callback = function() step(Vector3.new(0, 0, 20))  end })
-    TeleManual:Button({ Title = "← Left",    Callback = function() step(Vector3.new(-20, 0, 0)) end })
-    TeleManual:Button({ Title = "→ Right",   Callback = function() step(Vector3.new(20, 0, 0))  end })
-    TeleManual:Button({ Title = "↑ Up",      Callback = function() step(Vector3.new(0, 20, 0))  end })
-    TeleManual:Button({ Title = "↓ Down",    Callback = function() step(Vector3.new(0, -20, 0)) end })
+    TeleManual:Button({ Title = "↑ Forward", Callback = function() if Hub.manual_step then Hub.manual_step(Vector3.new(0, 0, -20)) end end })
+    TeleManual:Button({ Title = "↓ Back",    Callback = function() if Hub.manual_step then Hub.manual_step(Vector3.new(0, 0, 20)) end end })
+    TeleManual:Button({ Title = "← Left",    Callback = function() if Hub.manual_step then Hub.manual_step(Vector3.new(-20, 0, 0)) end end })
+    TeleManual:Button({ Title = "→ Right",   Callback = function() if Hub.manual_step then Hub.manual_step(Vector3.new(20, 0, 0)) end end })
+    TeleManual:Button({ Title = "↑ Up",      Callback = function() if Hub.manual_step then Hub.manual_step(Vector3.new(0, 20, 0)) end end })
+    TeleManual:Button({ Title = "↓ Down",    Callback = function() if Hub.manual_step then Hub.manual_step(Vector3.new(0, -20, 0)) end end })
 
     local TeleIsl = TeleTab:Section({ Title = "Island Anchors", Box = true, BoxBorder = true, Opened = true })
-    local ISLANDS = {
+    local ISLANDS = CFG.IslandList or {
         "Kingdom of Rose", "Cursed Ship", "Ice Castle", "Forgotten Island", "Green Zone",
         "Graveyard", "Snow Mountain", "Hot and Cold", "Port Town", "Great Tree",
         "Hydra Island", "Castle on the Sea", "Haunted Castle", "Sea of Treats",
@@ -155,54 +139,55 @@ return function(Hub)
         "Desert", "Jungle", "Marine Fortress", "Sky Island", "Prison",
     }
     for _, name in ipairs(ISLANDS) do
-        TeleIsl:Button({ Title = name, Callback = function() Hub.tp_scan(name) end })
+        TeleIsl:Button({ Title = name, Callback = function() if Hub.tp_scan then Hub.tp_scan(name) end end })
     end
 
     local TeleNpc = TeleTab:Section({ Title = "NPC / Custom Teleport", Box = true, BoxBorder = true, Opened = true })
     local npc_val = ""
-    TeleNpc:Input({ Title = "Name", Desc = "Exact name of the part or model to teleport to.",
-        Placeholder = "e.g. Blox Fruit Dealer", Value = "",
+    TeleNpc:Input({ Title = "Name", Placeholder = "e.g. Blox Fruit Dealer", Value = "",
         Callback = function(v) npc_val = v or "" end })
-    TeleNpc:Button({ Title = "Teleport", Icon = "arrow-right", Desc = "Teleport to the named target.",
-        Callback = function() if npc_val ~= "" then Hub.tp_scan(npc_val) end end })
-    TeleNpc:Button({ Title = "Copy My Position", Icon = "copy", Desc = "Copies current position.",
+    TeleNpc:Button({ Title = "Teleport", Icon = "arrow-right",
+        Callback = function() if npc_val ~= "" and Hub.tp_scan then Hub.tp_scan(npc_val) end end })
+    TeleNpc:Button({ Title = "Copy My Position", Icon = "copy",
         Callback = function()
-            local r = Hub.hrp(); if not r then return end
+            local r = Hub.hrp and Hub.hrp() or nil
+            if not r then return end
             local txt = string.format("%.0f, %.0f, %.0f", r.Position.X, r.Position.Y, r.Position.Z)
             if setclipboard then pcall(function() setclipboard(txt) end) end
         end })
 
     -- MISC
     local MiscSec = MiscTab:Section({ Title = "Client", Box = true, BoxBorder = true, Opened = true })
-    MiscSec:Toggle({ Title = "Unlock FPS", Desc = "Caps render at 240 fps.", Value = false, Flag = "fps",
-        Callback = function(v) if Hub.set_fps then Hub.set_fps(v) end end })
-    MiscSec:Toggle({ Title = "Low Graphics", Desc = "Reduces render quality.", Value = false, Flag = "low_gfx",
-        Callback = function(v) if Hub.set_low_gfx then Hub.set_low_gfx(v) end end })
-    MiscSec:Toggle({ Title = "Hide Roblox GUI", Desc = "Hides core screens.", Value = false, Flag = "hide_gui",
-        Callback = function(v) if Hub.hide_gui then Hub.hide_gui(v) end end })
-    MiscSec:Button({ Title = "Toggle Minimap", Desc = "Show / hide minimap.", Icon = "map",
-        Callback = function() if Hub.toggle_minimap then Hub.toggle_minimap() end end })
+    MiscSec:Toggle({ Title = "Unlock FPS", Value = false, Flag = "fps",
+        Callback = function(v) if Hub.UnlockFPS then Hub.UnlockFPS() end end })
+    MiscSec:Toggle({ Title = "Low Graphics", Value = false, Flag = "low_gfx",
+        Callback = function(v) if Hub.LowGraphics then Hub.LowGraphics() end end })
+    MiscSec:Toggle({ Title = "Hide Roblox GUI", Value = false, Flag = "hide_gui",
+        Callback = function(v) if Hub.HideGUI then Hub.HideGUI(v) end end })
+    MiscSec:Button({ Title = "Toggle Minimap",
+        Callback = function() if Hub.ToggleMinimap then Hub.ToggleMinimap() end end })
 
     local RedeemSec = MiscTab:Section({ Title = "Redeem Codes", Box = true, BoxBorder = true, Opened = true })
     local redeem_val = ""
-    RedeemSec:Input({ Title = "Code", Desc = "Enter a redeem code.",
-        Placeholder = "e.g. KITT_RESET", Value = "",
+    RedeemSec:Input({ Title = "Code", Placeholder = "e.g. KITT_RESET", Value = "",
         Callback = function(v) redeem_val = v or "" end })
-    RedeemSec:Button({ Title = "Redeem", Icon = "gift", Desc = "Sends the code.",
-        Callback = function() if redeem_val ~= "" and Hub.redeem then Hub.redeem(redeem_val) end end })
+    RedeemSec:Button({ Title = "Redeem", Icon = "gift",
+        Callback = function() if redeem_val ~= "" and Hub.RedeemCodes then Hub.RedeemCodes() end end })
 
     local StatusSec = MiscTab:Section({ Title = "Live Status", Box = true, BoxBorder = true, Opened = true })
     local StatusLabel = StatusSec:Paragraph({ Title = "Status",
-        Desc = Hub.live_status and Hub.live_status() or "ready" })
+        Desc = Hub.Status and "ready" or "no status fn" })
     task.spawn(function()
         while true do
             task.wait(2)
             pcall(function()
-                if not Hub.live_status then return end
-                local s = Hub.live_status()
-                if StatusLabel.SetDesc then StatusLabel:SetDesc(s)
-                elseif StatusLabel.RefreshDesc then StatusLabel:RefreshDesc(s)
-                elseif StatusLabel.Set then StatusLabel:Set(s) end
+                if not Hub.Status then return end
+                local s = Hub.Status()
+                local txt = string.format("Lv %s | Beli %s | Frags %s | %s | %s",
+                    tostring(s.Level), tostring(s.Beli), tostring(s.Fragments), tostring(s.Sea), tostring(s.ActiveLoop))
+                if StatusLabel.SetDesc then StatusLabel:SetDesc(txt)
+                elseif StatusLabel.RefreshDesc then StatusLabel:RefreshDesc(txt)
+                elseif StatusLabel.Set then StatusLabel:Set(txt) end
             end)
         end
     end)
@@ -219,4 +204,4 @@ return function(Hub)
         end)
     end)
     return Hub
-end
+end)(getgenv().BFHub)
