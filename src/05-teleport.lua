@@ -74,16 +74,16 @@ BFHub.TPFruit = function()
 end
 
 -- -----------------------------------------------
--- portal routes — requestEntrance with portal coords
+-- portal routes
 -- -----------------------------------------------
 CFG.PortalRoutes = {
     Sea1 = {
-        ["Sky"]       = Vector3.new(-4607.82, 872.54, -1667.56),
-        ["UnderWater"]= Vector3.new(61163.85, 11.76, 1819.78),
+        ["Sky"]        = Vector3.new(-4607.82, 872.54, -1667.56),
+        ["UnderWater"] = Vector3.new(61163.85, 11.76, 1819.78),
     },
     Sea2 = {
-        ["SwanRoom"]   = Vector3.new(-7894.62, 5545.49, -380.25),
-        ["Cursed Ship"]= Vector3.new(923.21, 126.98, 32852.83),
+        ["SwanRoom"]    = Vector3.new(-7894.62, 5545.49, -380.25),
+        ["Cursed Ship"] = Vector3.new(923.21, 126.98, 32852.83),
     },
     Sea3 = {
         ["Castle On The Sea"] = Vector3.new(-5058, 314, -3170),
@@ -108,7 +108,7 @@ BFHub.TPPortal = function(name)
 end
 
 -- -----------------------------------------------
--- manual step (grid movement, single block at a time)
+-- manual step
 -- -----------------------------------------------
 BFHub.StepMove = function(direction, distance)
     distance = distance or 50
@@ -126,14 +126,14 @@ BFHub.StepMove = function(direction, distance)
 end
 
 -- -----------------------------------------------
--- teleport loop — driven by CFG.TPIsland / TPNPC
+-- teleport loops
 -- -----------------------------------------------
 BFHub.StartLoop("TPIsland", function()
     if CFG.TPIsland == "" then return end
     local anchor = CFG.IslandAnchors[CFG.TPIsland]
     if not anchor then return end
     if H.Dist(anchor.Position) < 15 then
-        BFHub.StopTween and BFHub.StopTween()
+        H.StopTween()
         return
     end
     H.Tween(anchor, 400)
