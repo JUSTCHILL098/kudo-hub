@@ -1,9 +1,9 @@
 -- language: Lua, file: init.lua
-local VERSION = "2026-11-11-b"
+local VERSION = "2026-11-11-g"
 if not game:IsLoaded() then repeat game.Loaded:Wait() until game:IsLoaded() end
 if getgenv().BFHubVersion == VERSION then
     pcall(function()
-        game.StarterGui:SetCore("SendNotification", {Title="BF Hub", Text="already loaded (" .. VERSION .. ")", Duration=3})
+        game.StarterGui:SetCore("SendNotification", {Title="kuzunoha hub", Text="already loaded (" .. VERSION .. ")", Duration=3})
     end)
     return
 end
