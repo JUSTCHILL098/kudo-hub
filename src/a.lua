@@ -439,4 +439,245 @@ CFG.QuestChains = {
         {1800,1824,"Fishman Captain","DeepForestIsland3",2,CFrame.new(-10583.1,331.78,-8759.46)},
         {1825,1849,"Forest Pirate","DeepForestIsland",1,CFrame.new(-13232.66,332.4,-7626.48)},
         {1850,1899,"Mythological Pirate","DeepForestIsland",2,CFrame.new(-13232.66,332.4,-7626.48)},
-        {1900,1924,"Jungle Pirate","Deep
+        {1900,1924,"Jungle Pirate","DeepForestIsland2",1,CFrame.new(-12682.1,390.89,-9902.12)},
+        {1925,1974,"Musketeer Pirate","DeepForestIsland2",2,CFrame.new(-12682.1,390.89,-9902.12)},
+        {1975,2024,"Reborn Skeleton","HauntedQuest1",1,CFrame.new(-9480.81,142.13,5566.37)},
+        {2025,2049,"Demonic Soul","HauntedQuest1",1,CFrame.new(-9515.4,172.27,6078.9)},
+        {2050,2074,"Posessed Mummy","HauntedQuest2",2,CFrame.new(-9515.4,172.27,6078.9)},
+        {2075,2099,"Peanut Scout","PeanutQuest1",1,CFrame.new(-2104.45,38.13,-10194.0)},
+        {2100,2124,"Peanut President","PeanutQuest2",2,CFrame.new(-2104.45,38.13,-10194.0)},
+        {2125,2149,"Ice Cream Chef","IceCreamQuest1",1,CFrame.new(-821.36,65.85,-10965.26)},
+        {2150,2174,"Ice Cream Commander","IceCreamIslandQuest",2,CFrame.new(-821.36,65.85,-10965.26)},
+        {2175,2249,"Cookie Crafter","CakeQuest1",1,CFrame.new(-2017.49,36.85,-12027.54)},
+        {2250,2299,"Cake Guard","CakeQuest1",2,CFrame.new(-2017.49,36.85,-12027.54)},
+        {2300,2350,"Baking Staff","CakeQuest2",1,CFrame.new(-2017.49,36.85,-12027.54)},
+    },
+}
+
+-- ============================================================
+-- sea detection — reads Workspace.MAP attribute
+-- ============================================================
+H.GetSea = function()
+    local map = WS:GetAttribute("MAP")
+    if map == "Sea1" then return "Sea1" end
+    if map == "Sea2" then return "Sea2" end
+    if map == "Sea3" then return "Sea3" end
+    -- fallback by placeId
+    local pid = game.PlaceId
+    if pid == 2753915549 then return "Sea1" end
+    if pid == 4442272183 then return "Sea2" end
+    if pid == 7449423635 then return "Sea3" end
+    return "Sea1"
+end
+
+H.GetLevel = function()
+    local d = plr:FindFirstChild("Data")
+    return d and d:FindFirstChild("Level") and d.Level.Value or 1
+end
+
+H.GetBeli = function()
+    local d = plr:FindFirstChild("Data")
+    return d and d:FindFirstChild("Beli") and d.Beli.Value or 0
+end
+
+H.GetFragments = function()
+    local d = plr:FindFirstChild("Data")
+    return d and d:FindFirstChild("Fragments") and d.Fragments.Value or 0
+end
+
+-- ============================================================
+-- island anchors — 28 named, matches BF Hub's spec
+-- ============================================================
+CFG.IslandAnchors = {
+    -- Sea 1
+    ["Windmill Village"]     = CFrame.new(1060.9, 16.4, 1547.8),
+    ["Jungle"]               = CFrame.new(-1601.6, 36.8, 153.4),
+    ["Buggy Island"]         = CFrame.new(-1140.2, 4.7, 3827.4),
+    ["Desert"]               = CFrame.new(896.5, 6.4, 4390.1),
+    ["Snow Island"]          = CFrame.new(1386.8, 87.3, -1298.3),
+    ["Marine Fortress"]      = CFrame.new(-5035.5, 28.7, 4324.2),
+    ["Sky Island"]           = CFrame.new(-4842.1, 717.7, -2623.0),
+    ["Prison"]               = CFrame.new(5308.9, 1.6, 475.1),
+    ["Colosseum"]            = CFrame.new(-1577.8, 7.4, -2984.5),
+    ["Magma Village"]        = CFrame.new(-5316.1, 12.3, 8517.0),
+    ["Underwater City"]      = CFrame.new(61122.6, 18.5, 1569.4),
+    ["Fountain City"]        = CFrame.new(5258.3, 38.5, 4050.0),
+    -- Sea 2
+    ["Kingdom of Rose"]      = CFrame.new(-427.7, 73.0, 1835.9),
+    ["Green Zone"]           = CFrame.new(635.6, 73.1, 917.8),
+    ["Graveyard"]            = CFrame.new(-5494.3, 48.5, -794.6),
+    ["Snow Mountain"]        = CFrame.new(607.0, 401.4, -5370.5),
+    ["Ice Castle"]           = CFrame.new(-6061.8, 15.9, -4902.0),
+    ["Fire Village"]         = CFrame.new(-5429.0, 16.0, -5297.9),
+    ["Cursed Ship"]          = CFrame.new(1040.3, 125.1, 32911.0),
+    ["Frost Island"]         = CFrame.new(5668.1, 28.2, -6484.6),
+    ["Forgotten Island"]     = CFrame.new(-3054.6, 236.9, -10147.8),
+    -- Sea 3
+    ["Port Town"]            = CFrame.new(-289.6, 43.8, 5580.1),
+    ["Hydra Island"]         = CFrame.new(5833.1, 51.6, -1103.0),
+    ["Great Tree"]           = CFrame.new(2179.9, 28.7, -6740.0),
+    ["Castle on the Sea"]    = CFrame.new(-13232.7, 332.4, -7626.5),
+    ["Haunted Castle"]       = CFrame.new(-9480.8, 142.1, 5566.4),
+    ["Peanut Island"]        = CFrame.new(-2104.4, 38.1, -10194.0),
+    ["Cake Island"]          = CFrame.new(-2017.5, 36.9, -12027.5),
+    ["Tiki Outpost"]         = CFrame.new(-16927.5, 9.1, 433.9),
+    ["Temple of Time"]       = CFrame.new(28286, 14895, 103),
+}
+
+-- build island list for UI dropdowns
+CFG.IslandList = {}
+for name in pairs(CFG.IslandAnchors) do table.insert(CFG.IslandList, name) end
+table.sort(CFG.IslandList)
+
+-- build NPC list from ReplicatedStorage.NPCs
+CFG.NPCList = {}
+pcall(function()
+    for _, n in ipairs(RS.NPCs:GetChildren()) do
+        table.insert(CFG.NPCList, n.Name)
+    end
+    table.sort(CFG.NPCList)
+end)
+
+-- build mob list for specific mob farming dropdown
+CFG.MobList = {}
+for _, chain in pairs(CFG.QuestChains) do
+    for _, entry in ipairs(chain) do
+        if not table.find(CFG.MobList, entry[3]) then
+            table.insert(CFG.MobList, entry[3])
+        end
+    end
+end
+table.sort(CFG.MobList)
+
+-- ============================================================
+-- shared runtime state — every loop checks CFG, no globals scattered
+-- ============================================================
+BFHub.Runtime = {
+    running = {},        -- featureName -> true
+    threads = {},        -- featureName -> coroutine
+    farmTarget = nil,
+    killAuraLast = 0,
+    lastHop = 0,
+    lastWebhook = 0,
+}
+
+BFHub.StartLoop = function(name, fn, interval)
+    interval = interval or 0.1
+    if BFHub.Runtime.threads[name] then
+        task.cancel(BFHub.Runtime.threads[name])
+    end
+    BFHub.Runtime.running[name] = true
+    BFHub.Runtime.threads[name] = task.spawn(function()
+        while BFHub.Runtime.running[name] do
+            pcall(fn)
+            task.wait(interval)
+        end
+    end)
+end
+
+BFHub.StopLoop = function(name)
+    BFHub.Runtime.running[name] = false
+    if BFHub.Runtime.threads[name] then
+        pcall(task.cancel, BFHub.Runtime.threads[name])
+        BFHub.Runtime.threads[name] = nil
+    end
+end
+
+BFHub.StopAll = function()
+    for name in pairs(BFHub.Runtime.running) do
+        BFHub.StopLoop(name)
+    end
+    H.StopTween()
+end
+
+-- ============================================================
+-- combat — shared attack hook, used by farm / aura / boss loops
+-- ============================================================
+BFHub.Attack = function(targetModel, useFast)
+    if not targetModel then return end
+    local c = plr.Character; if not c then return end
+    local hum = c:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health <= 0 then return end
+
+    -- equip current weapon
+    if CFG.AutoHaki then
+        pcall(function() CommF_:InvokeServer("Buso") end)
+    end
+
+    if useFast ~= false and CFG.FastAttack then
+        -- fire the click remote the game uses for M1
+        local tool = c:FindFirstChildOfClass("Tool")
+        if tool then
+            local remote = tool:FindFirstChild("RemoteEvent") or tool:FindFirstChild("LeftClickRemote")
+            if remote then
+                pcall(function()
+                    local hrp = targetModel:FindFirstChild("HumanoidRootPart") or targetModel.PrimaryPart
+                    if hrp then remote:FireServer("TAP", hrp.Position) end
+                end)
+            end
+        end
+    end
+
+    -- register hit against target
+    pcall(function()
+        local hitRemote = RS:FindFirstChild("Remotes") and Remotes:FindFirstChild("CommF_")
+        if hitRemote then
+            hitRemote:InvokeServer("Attack", targetModel)
+        end
+    end)
+end
+
+BFHub.FindNearestMob = function(maxDist, nameFilter)
+    maxDist = maxDist or CFG.BringRadius
+    local enemies = WS:FindFirstChild("Enemies")
+    if not enemies then return nil end
+    local hr = H.HRP(); if not hr then return nil end
+    local best, bestDist = nil, maxDist
+    for _, e in ipairs(enemies:GetChildren()) do
+        if e:IsA("Model") then
+            local hum = e:FindFirstChildOfClass("Humanoid")
+            local ehr = e:FindFirstChild("HumanoidRootPart") or e.PrimaryPart
+            if hum and hum.Health > 0 and ehr then
+                local matches = true
+                if nameFilter then
+                    matches = false
+                    if type(nameFilter) == "string" then
+                        matches = e.Name == nameFilter or e.Name:find(nameFilter, 1, true) ~= nil
+                    elseif type(nameFilter) == "table" then
+                        for _, n in ipairs(nameFilter) do
+                            if e.Name == n or e.Name:find(n, 1, true) then matches = true; break end
+                        end
+                    end
+                end
+                if matches then
+                    local d = (ehr.Position - hr.Position).Magnitude
+                    if d < bestDist then best = e; bestDist = d end
+                end
+            end
+        end
+    end
+    return best, bestDist
+end
+
+-- bring mobs using AssemblyLinearVelocity (BF Hub spec — survives server checks)
+BFHub.BringMob = function(mob)
+    if not CFG.BringMobs or not mob then return end
+    local hr = H.HRP(); if not hr then return end
+    local ehr = mob:FindFirstChild("HumanoidRootPart"); if not ehr then return end
+    local d = (ehr.Position - hr.Position).Magnitude
+    if d > CFG.BringRadius + 50 then return end
+    -- velocity pull, not CFrame — matches BF Hub's stated invariant
+    local vel = (hr.Position - ehr.Position).Unit * 200
+    pcall(function() ehr.AssemblyLinearVelocity = vel end)
+end
+
+-- kill aura — capped at CFG.KillAuraRate fires/sec
+BFHub.KillAuraTick = function()
+    if not CFG.KillAura then return end
+    local now = tick()
+    if now - BFHub.Runtime.killAuraLast < (1 / CFG.KillAuraRate) then return end
+    BFHub.Runtime.killAuraLast = now
+    local mob = BFHub.FindNearestMob(50)
+    if mob then BFHub.Attack(mob) end
+end
+
+return true
