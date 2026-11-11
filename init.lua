@@ -1,35 +1,59 @@
--- language: Lua, file: init.lua, target: Roblox executor (WindUI 1.6.66)
--- Load: loadstring(game:HttpGet("https://raw.githubusercontent.com/<YOUR-USER>/<YOUR-REPO>/main/init.lua"))()
+-- language: Lua, file: init.lua, target: Roblox executor
+-- Load: loadstring(game:HttpGet("https://raw.githubusercontent.com/JUSTCHILL098/kudo-hub/main/init.lua"))()
 
 if not game:IsLoaded() then repeat game.Loaded:Wait() until game:IsLoaded() end
 if getgenv().BFHubLoaded then return end
 getgenv().BFHubLoaded = true
 
 getgenv().BFHub = getgenv().BFHub or {}
-BFHub.src = "https://raw.githubusercontent.com/JUSTCHILL098>/kudo-hub/main/src/"
+
+local GITHUB_USER = "JUSTCHILL098"
+local GITHUB_REPO = "kudo-hub"
+
+BFHub.src = ("https://raw.githubusercontent.com/%s/%s/main/src/"):format(GITHUB_USER, GITHUB_REPO)
 
 local order = {
-    "a",              -- services, CFG table, helpers
-    "02-themes",
-    "03-esp",
-    "04-farm",
-    "05-teleport",
-    "06-misc",
-    "07-ui",
-    "08-settings-about",
+    { file = "a",                  chunk = "bfhub_a" },
+    { file = "02-themes",          chunk = "bfhub_02_themes" },
+    { file = "03-esp",             chunk = "bfhub_03_esp" },
+    { file = "04-farm",            chunk = "bfhub_04_farm" },
+    { file = "05-teleport",        chunk = "bfhub_05_teleport" },
+    { file = "06-misc",            chunk = "bfhub_06_misc" },
+    { file = "07-ui",              chunk = "bfhub_07_ui" },
+    { file = "08-settings-about",  chunk = "bfhub_08_settings" },
 }
 
 local windUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua"))()
 BFHub.WindUI = windUI
 
-for _, name in ipairs(order) do
-    local ok, err = pcall(function()
-        local src = game:HttpGet(BFHub.src .. name .. ".lua")
-        local chunk, compileErr = loadstring(src, name)
-        if not chunk then error("compile " .. name .. ": " .. tostring(compileErr)) end
-        chunk()
-    end)
-    if not ok then warn("[BF Hub] load fail " .. name .. ": " .. tostring(err)) end
+local function fetch(url)
+    local ok, body = pcall(game.HttpGet, game, url)
+    if not ok or type(body) ~= "string" or #body == 0 then
+        return nil, "http fetch failed: " .. tostring(body)
+    end
+    local head = body:sub(1, 200)
+    if head:find("404: Not Found", 1, true) or head:sub(1, 1) == "<" then
+        return nil, "404 / non-lua body from " .. url
+    end
+    return body
+end
+
+for _, entry in ipairs(order) do
+    local url = BFHub.src .. entry.file .. ".lua"
+    local body, fetchErr = fetch(url)
+    if not body then
+        warn("[BF Hub] " .. entry.file .. ": " .. fetchErr)
+    else
+        local chunk, compileErr = loadstring(body, entry.chunk)
+        if not chunk then
+            warn("[BF Hub] compile " .. entry.file .. ": " .. tostring(compileErr))
+        else
+            local ok, runErr = pcall(chunk)
+            if not ok then
+                warn("[BF Hub] run " .. entry.file .. ": " .. tostring(runErr))
+            end
+        end
+    end
 end
 
 BFHub.Notify = function(title, text, dur)
