@@ -1,5 +1,5 @@
 -- language: Lua, file: init.lua
-local VERSION = "2026-11-11-g"
+local VERSION = "2026-11-11-h"
 if not game:IsLoaded() then repeat game.Loaded:Wait() until game:IsLoaded() end
 if getgenv().BFHubVersion == VERSION then
     pcall(function()
