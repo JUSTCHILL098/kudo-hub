@@ -1,83 +1,41 @@
--- language: Lua, file: init.lua
-local BASE = "https://raw.githubusercontent.com/JUSTCHILL098/kudo-hub/main/src/"
+-- language: Lua, file: init.lua, target: Roblox executor (WindUI 1.6.66)
+-- Load: loadstring(game:HttpGet("https://raw.githubusercontent.com/<YOUR-USER>/<YOUR-REPO>/main/init.lua"))()
 
-local FILES = {
-    "a.lua",
-    "02-themes.lua",
-    "03-esp.lua",
-    "04-farm.lua",
-    "05-teleport.lua",
-    "06-misc.lua",
-    "07-ui.lua",
-    "08-settings-about.lua",
+if not game:IsLoaded() then repeat game.Loaded:Wait() until game:IsLoaded() end
+if getgenv().BFHubLoaded then return end
+getgenv().BFHubLoaded = true
+
+getgenv().BFHub = getgenv().BFHub or {}
+BFHub.src = "https://raw.githubusercontent.com/JUSTCHILL098>/kudo-hub/main/src/"
+
+local order = {
+    "a",              -- services, CFG table, helpers
+    "02-themes",
+    "03-esp",
+    "04-farm",
+    "05-teleport",
+    "06-misc",
+    "07-ui",
+    "08-settings-about",
 }
 
-local WINDUI_URLS = {
-    "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua",
-    "https://github.com/Footagesus/WindUI/releases/download/1.6.50/main.lua",
-    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
-    "https://cdn.jsdelivr.net/gh/Footagesus/WindUI@main/dist/main.lua",
-}
+local windUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua"))()
+BFHub.WindUI = windUI
 
-local WindUI
-for _, url in ipairs(WINDUI_URLS) do
-    for attempt = 1, 3 do
-        local ok, body = pcall(game.HttpGet, game, url, true)
-        if ok and type(body) == "string" and #body > 5000 then
-            local chunk = loadstring(body, "=WindUI")
-            if chunk then
-                local run_ok, lib = pcall(chunk)
-                if run_ok and type(lib) == "table" and type(lib.CreateWindow) == "function" then
-                    WindUI = lib
-                    print("[hub] WindUI OK ("..attempt.."): "..url)
-                    break
-                end
-            end
-        end
-        if WindUI then break end
-        warn("[hub] WindUI attempt "..attempt.." failed: "..url)
-        task.wait(1)
-    end
-    if WindUI then break end
+for _, name in ipairs(order) do
+    local ok, err = pcall(function()
+        local src = game:HttpGet(BFHub.src .. name .. ".lua")
+        local chunk, compileErr = loadstring(src, name)
+        if not chunk then error("compile " .. name .. ": " .. tostring(compileErr)) end
+        chunk()
+    end)
+    if not ok then warn("[BF Hub] load fail " .. name .. ": " .. tostring(err)) end
 end
 
-if type(WindUI) ~= "table" then
-    warn("[hub] all WindUI sources failed")
-    return
-end
-WindUI:SetNotificationLower(true)
-
-local Hub = { WindUI = WindUI, version = "1.6.66", started_at = os.time() }
-getgenv().BFHub = Hub
-
-local t = tostring(os.time())
-for _, name in ipairs(FILES) do
-    local url = BASE .. name .. "?t=" .. t
-    local ok, body = pcall(game.HttpGet, game, url, true)
-    if not ok or type(body) ~= "string" or #body < 50 then
-        warn("[hub] FETCH FAILED " .. name)
-        return
-    end
-    local chunk, err = loadstring(body, "=" .. name)
-    if not chunk then
-        warn("[hub] COMPILE FAILED " .. name .. ": " .. tostring(err))
-        return
-    end
-    local run_ok, res = pcall(chunk, Hub)
-    if not run_ok then
-        warn("[hub] RUNTIME ERROR " .. name .. ": " .. tostring(res))
-        return
-    end
-    if type(res) == "function" then
-        local call_ok, call_res = pcall(res, Hub)
-        if not call_ok then
-            warn("[hub] RUNTIME ERROR (invoke) " .. name .. ": " .. tostring(call_res))
-            return
-        end
-        res = call_res
-    end
-    if type(res) == "table" then for k, v in pairs(res) do Hub[k] = v end end
-    print("[hub] loaded " .. name)
+BFHub.Notify = function(title, text, dur)
+    pcall(function()
+        game.StarterGui:SetCore("SendNotification", {Title=title, Text=text, Duration=dur or 5})
+    end)
 end
 
-WindUI:Notify({ Title = "KUZUNOHA", Content = "Loaded", Icon = "check-circle", Duration = 4 })
+BFHub.Notify("BF Hub", "loaded — " .. #order .. " modules", 5)
