@@ -1,73 +1,260 @@
--- language: Lua, file: 06-misc.lua
-return function(Hub)
-    local LP = Hub.LP
-    local CFG = Hub.CFG
-    local fire = Hub.fire
-    local hrp = Hub.hrp
-    local hum = Hub.hum
+-- language: Lua, file: src/06-misc.lua
+-- fps, gfx, gui, redeem, anti-afk, hop guards, webhooks, status
 
-    local function set_fps(on)
-        CFG.misc.fps = on
-        if setfpscap then pcall(function() setfpscap(on and 240 or 60) end)
-        elseif set_fps_cap then pcall(function() set_fps_cap(on and 240 or 60) end) end
-    end
+local CFG = BFHub.CFG
+local H   = BFHub.Helpers
+local S   = BFHub.Services
+local CommF_ = S.CommF_
+local plr = S.Players.LocalPlayer
+local RS  = S.RS
+local WS  = S.WS
+local Lighting = S.Lighting
 
-    local function set_low_gfx(on)
-        CFG.misc.low_gfx = on
-        if on then
-            pcall(function()
-                settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-                for _, v in ipairs(Hub.Workspace:GetDescendants()) do
-                    if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") then v.Enabled = false end
-                end
-            end)
-        else
-            pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level10 end)
-        end
-    end
-
-    local function hide_gui(on)
-        CFG.misc.hide_gui = on
-        pcall(function()
-            local pg = LP:FindFirstChild("PlayerGui"); if not pg then return end
-            for _, g in ipairs(pg:GetChildren()) do
-                if g:IsA("ScreenGui") and g.Name ~= "WindUI" and not g.Name:find("Kuzu") then
-                    g.Enabled = not on
+-- -----------------------------------------------
+-- FPS unlock — apply FastMode settings
+-- -----------------------------------------------
+BFHub.UnlockFPS = function()
+    pcall(function()
+        local gui = plr:FindFirstChild("PlayerGui")
+        local main = gui and gui:FindFirstChild("Main")
+        if not main then return end
+        for _, desc in ipairs(main:GetDescendants()) do
+            if desc:IsA("TextButton") or desc:IsA("ImageButton") then
+                if desc.Name == "FastMode" and desc.Visible then
+                    pcall(function() firesignal(desc.Activated) end)
+                    return
                 end
             end
-        end)
-    end
-
-    local function toggle_minimap()
-        pcall(function()
-            local cg = LP.PlayerGui:FindFirstChild("Custom")
-            local mm = cg and cg:FindFirstChild("Minimap")
-            if mm then mm.Visible = not mm.Visible end
-        end)
-    end
-
-    local function live_status()
-        local root = hrp(); local h = hum()
-        local players = #Hub.Players:GetPlayers()
-        local server = game.JobId ~= "" and game.JobId:sub(1, 8) or "solo"
-        return string.format("HP %d/%d | %d players | server %s | pos %d,%d,%d",
-            h and math.floor(h.Health) or 0, h and math.floor(h.MaxHealth) or 0,
-            players, server,
-            root and math.floor(root.Position.X) or 0,
-            root and math.floor(root.Position.Y) or 0,
-            root and math.floor(root.Position.Z) or 0)
-    end
-
-    local function redeem(code)
-        if not code or code == "" then return false end
-        return fire("Redeem", code)
-    end
-
-    Hub.set_fps = set_fps
-    Hub.set_low_gfx = set_low_gfx
-    Hub.hide_gui = hide_gui
-    Hub.toggle_minimap = toggle_minimap
-    Hub.live_status = live_status
-    Hub.redeem = redeem
-    return Hub
+        end
+    end)
+    -- fallback: settings().Rendering.QualityLevel
+    pcall(function() settings().Rendering.QualityLevel = 1 end)
 end
+
+-- -----------------------------------------------
+-- low graphics — strip effects
+-- -----------------------------------------------
+BFHub.LowGraphics = function()
+    pcall(function()
+        local terrain = WS:FindFirstChildOfClass("Terrain")
+        if terrain then
+            terrain.WaterWaveSize = 0
+            terrain.WaterWaveSpeed = 0
+            terrain.WaterReflectance = 0
+            terrain.WaterTransparency = 0
+        end
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 9e9
+        for _, d in ipairs(Lighting:GetDescendants()) do
+            if d:IsA("BlurEffect") or d:IsA("SunRaysEffect") or d:IsA("ColorCorrectionEffect")
+               or d:IsA("BloomEffect") or d:IsA("DepthOfFieldEffect") then
+                d.Enabled = false
+            end
+        end
+    end)
+end
+
+-- -----------------------------------------------
+-- GUI hide — toggle CoreGui
+-- -----------------------------------------------
+local function setCoreGui(kind, enabled)
+    pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(kind, enabled) end)
+end
+
+BFHub.HideGUI = function(hide)
+    setCoreGui(Enum.CoreGuiType.PlayerList, not hide)
+    setCoreGui(Enum.CoreGuiType.Chat, not hide)
+end
+
+-- -----------------------------------------------
+-- minimap toggle — hide / show Roblox's minimap
+-- -----------------------------------------------
+BFHub.ToggleMinimap = function(hide)
+    pcall(function()
+        plr.PlayerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, not hide)
+    end)
+end
+
+-- -----------------------------------------------
+-- redeem codes — XENON's list carried forward
+-- -----------------------------------------------
+CFG.RedeemCodeList = {
+    "LIGHTNINGABUSE","1LOSTADMIN","ADMINFIGHT","GIFTING_HOURS","NOMOREHACK","BANEXPLOIT",
+    "WildDares","BossBuild","GetPranked","EARN_FRUITS","SUB2GAMERROBOT_RESET1","KITT_RESET",
+    "Bignews","CHANDLER","Fudd10","fudd10_v2","Sub2UncleKizaru","FIGHT4FRUIT","kittgaming",
+    "TRIPLEABUSE","Sub2CaptainMaui","Sub2Fer999","Enyu_is_Pro","Magicbus","JCWK","Starcodeheo",
+    "Bluxxy","SUB2GAMERROBOT_EXP1","Sub2NoobMaster123","Sub2Daigrock","Axiore","TantaiGaming",
+    "StrawHatMaine","Sub2OfficialNoobie","TheGreatAce","JULYUPDATE_RESET","ADMINHACKED",
+    "SEATROLLING","24NOADMIN","ADMIN_TROLL","NEWTROLL","SECRET_ADMIN","staffbattle",
+    "NOEXPLOIT","NOOB2ADMIN","CODESLIDE","fruitconcepts","krazydares",
+}
+
+BFHub.RedeemCodes = function()
+    local redeem = S.Redeem
+    if not redeem then return end
+    for _, code in ipairs(CFG.RedeemCodeList) do
+        pcall(function() redeem:InvokeServer(code) end)
+        task.wait(0.1)
+    end
+    H.Notify("Codes", "sent " .. #CFG.RedeemCodeList .. " codes", 4)
+end
+
+-- -----------------------------------------------
+-- anti-AFK
+-- -----------------------------------------------
+BFHub.StartLoop("AntiAFK", function()
+    if not CFG.AntiAFK then return end
+    pcall(function()
+        local vu = game:GetService("VirtualUser")
+        vu:CaptureController()
+        vu:ClickButton2(Vector2.new())
+    end)
+end, 60)
+
+-- -----------------------------------------------
+-- admin hop guard
+-- -----------------------------------------------
+local knownAdmins = {
+    red_game43 = true, rip_indra = true, Axiore = true, Polkster = true,
+    wenlocktoad = true, Daigrock = true, Uzoth = true, Azarth = true,
+    arlthmetic = true, Death_King = true, Lunoven = true, TheGreateAced = true,
+}
+
+BFHub.StartLoop("AdminHop", function()
+    if not CFG.HopOnAdmin then return end
+    for _, p in ipairs(S.Players:GetPlayers()) do
+        if p ~= plr and knownAdmins[p.Name] then
+            H.Notify("Admin detected", p.Name .. " — hopping", 3)
+            H.HopServer()
+            return
+        end
+    end
+end, 3)
+
+-- -----------------------------------------------
+-- auto-hop timer
+-- -----------------------------------------------
+BFHub.StartLoop("AutoHop", function()
+    if not CFG.HopOnAdmin then return end
+    if tick() - BFHub.Runtime.lastHop > CFG.HopInterval then
+        BFHub.Runtime.lastHop = tick()
+        H.HopServer()
+    end
+end, 30)
+
+-- -----------------------------------------------
+-- team join — selects Pirates or Marines on entry
+-- -----------------------------------------------
+BFHub.JoinTeam = function(teamName)
+    pcall(function() CommF_:InvokeServer("SetTeam", teamName or CFG.Team) end)
+    -- handle GUI prompt
+    local gui = plr:FindFirstChild("PlayerGui")
+    local main = gui and (gui:FindFirstChild("Main") or gui:FindFirstChild("Main (minimal)"))
+    local choose = main and main:FindFirstChild("ChooseTeam")
+    if choose and choose.Visible then
+        local container = choose:FindFirstChild("Container")
+        if container then
+            local teamBtn = container:FindFirstChild(teamName or "Pirates")
+            local frame = teamBtn and teamBtn:FindFirstChild("Frame")
+            local btn = frame and frame:FindFirstChild("TextButton")
+            if btn then pcall(function() firesignal(btn.Activated) end) end
+        end
+    end
+end
+
+-- -----------------------------------------------
+-- live status — collects level / beli / frags / current action
+-- -----------------------------------------------
+BFHub.Status = function()
+    return {
+        Level = H.GetLevel(),
+        Beli = H.GetBeli(),
+        Fragments = H.GetFragments(),
+        Sea = H.GetSea(),
+        JobId = game.JobId,
+        PlaceId = game.PlaceId,
+        Uptime = math.floor(WS.DistributedGameTime),
+        ActiveLoop = (function()
+            for name, running in pairs(BFHub.Runtime.running) do
+                if running then return name end
+            end
+            return "idle"
+        end)(),
+    }
+end
+
+-- -----------------------------------------------
+-- webhook — player join/leave, gacha, data log
+-- -----------------------------------------------
+local function postWebhook(url, body)
+    if not url or url == "" then return end
+    task.spawn(function()
+        pcall(function()
+            S.HS:PostAsync(url, S.HS:JSONEncode(body),
+                Enum.HttpContentType.ApplicationJson)
+        end)
+    end)
+end
+
+BFHub.Webhook = {}
+
+BFHub.Webhook.Send = function(embed)
+    postWebhook(CFG.Webhook, { embeds = { embed } })
+end
+
+BFHub.Webhook.Player = function(kind, playerName, userCount)
+    if not CFG.WebhookPlayer then return end
+    BFHub.Webhook.Send({
+        title = "Player " .. kind,
+        description = "**" .. tostring(playerName) .. "** — " .. tostring(userCount) .. " in server",
+        color = kind == "joined" and 0x00ff66 or 0xff4444,
+        timestamp = DateTime.now():ToIsoDate(),
+    })
+end
+
+BFHub.Webhook.Gacha = function(fruitName)
+    if not CFG.WebhookGacha then return end
+    BFHub.Webhook.Send({
+        title = "Fruit Rolled",
+        description = "**" .. tostring(fruitName) .. "**",
+        color = 0xffdd00,
+        timestamp = DateTime.now():ToIsoDate(),
+    })
+end
+
+BFHub.Webhook.DataLog = function()
+    if not CFG.WebhookDataLog then return end
+    local s = BFHub.Status()
+    BFHub.Webhook.Send({
+        title = "BF Hub — Data Log",
+        fields = {
+            {name="Level", value=tostring(s.Level), inline=true},
+            {name="Beli", value=tostring(s.Beli), inline=true},
+            {name="Fragments", value=tostring(s.Fragments), inline=true},
+            {name="Sea", value=s.Sea, inline=true},
+            {name="Active Loop", value=s.ActiveLoop, inline=true},
+            {name="JobId", value=s.JobId, inline=false},
+        },
+        color = 0x5588ff,
+        timestamp = DateTime.now():ToIsoDate(),
+    })
+end
+
+S.Players.PlayerAdded:Connect(function(p)
+    if p == plr then return end
+    BFHub.Webhook.Player("joined", p.Name, #S.Players:GetPlayers())
+end)
+
+S.Players.PlayerRemoving:Connect(function(p)
+    BFHub.Webhook.Player("left", p.Name, #S.Players:GetPlayers() - 1)
+end)
+
+-- data log every 5 minutes
+BFHub.StartLoop("DataLog", function()
+    if tick() - BFHub.Runtime.lastWebhook > 300 then
+        BFHub.Runtime.lastWebhook = tick()
+        BFHub.Webhook.DataLog()
+    end
+end, 30)
+
+return true
