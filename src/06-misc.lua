@@ -11,7 +11,7 @@ local WS  = S.WS
 local Lighting = S.Lighting
 
 -- -----------------------------------------------
--- FPS unlock — apply FastMode settings
+-- FPS unlock
 -- -----------------------------------------------
 BFHub.UnlockFPS = function()
     pcall(function()
@@ -27,12 +27,11 @@ BFHub.UnlockFPS = function()
             end
         end
     end)
-    -- fallback: settings().Rendering.QualityLevel
     pcall(function() settings().Rendering.QualityLevel = 1 end)
 end
 
 -- -----------------------------------------------
--- low graphics — strip effects
+-- low graphics
 -- -----------------------------------------------
 BFHub.LowGraphics = function()
     pcall(function()
@@ -55,7 +54,7 @@ BFHub.LowGraphics = function()
 end
 
 -- -----------------------------------------------
--- GUI hide — toggle CoreGui
+-- GUI hide
 -- -----------------------------------------------
 local function setCoreGui(kind, enabled)
     pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(kind, enabled) end)
@@ -66,9 +65,6 @@ BFHub.HideGUI = function(hide)
     setCoreGui(Enum.CoreGuiType.Chat, not hide)
 end
 
--- -----------------------------------------------
--- minimap toggle — hide / show Roblox's minimap
--- -----------------------------------------------
 BFHub.ToggleMinimap = function(hide)
     pcall(function()
         plr.PlayerGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, not hide)
@@ -76,7 +72,7 @@ BFHub.ToggleMinimap = function(hide)
 end
 
 -- -----------------------------------------------
--- redeem codes — XENON's list carried forward
+-- redeem codes
 -- -----------------------------------------------
 CFG.RedeemCodeList = {
     "LIGHTNINGABUSE","1LOSTADMIN","ADMINFIGHT","GIFTING_HOURS","NOMOREHACK","BANEXPLOIT",
@@ -112,7 +108,7 @@ BFHub.StartLoop("AntiAFK", function()
 end, 60)
 
 -- -----------------------------------------------
--- admin hop guard
+-- admin hop guard — only triggers if admin is IN the server
 -- -----------------------------------------------
 local knownAdmins = {
     red_game43 = true, rip_indra = true, Axiore = true, Polkster = true,
@@ -122,8 +118,10 @@ local knownAdmins = {
 
 BFHub.StartLoop("AdminHop", function()
     if not CFG.HopOnAdmin then return end
+    if getgenv().BFHubAdminHopCooldown and tick() < getgenv().BFHubAdminHopCooldown then return end
     for _, p in ipairs(S.Players:GetPlayers()) do
         if p ~= plr and knownAdmins[p.Name] then
+            getgenv().BFHubAdminHopCooldown = tick() + 60
             H.Notify("Admin detected", p.Name .. " — hopping", 3)
             H.HopServer()
             return
@@ -132,22 +130,23 @@ BFHub.StartLoop("AdminHop", function()
 end, 3)
 
 -- -----------------------------------------------
--- auto-hop timer
+-- auto-hop timer — own toggle, session-age gated, default OFF
 -- -----------------------------------------------
 BFHub.StartLoop("AutoHop", function()
-    if not CFG.HopOnAdmin then return end
-    if tick() - BFHub.Runtime.lastHop > CFG.HopInterval then
-        BFHub.Runtime.lastHop = tick()
-        H.HopServer()
-    end
+    if not CFG.AutoHopTimer then return end
+    local sessionAge = tick() - (BFHub.Runtime.sessionStart or tick())
+    if sessionAge < CFG.HopInterval then return end
+    if tick() - BFHub.Runtime.lastHop < CFG.HopInterval then return end
+    BFHub.Runtime.lastHop = tick()
+    H.Notify("AutoHop", "interval reached — hopping", 3)
+    H.HopServer()
 end, 30)
 
 -- -----------------------------------------------
--- team join — selects Pirates or Marines on entry
+-- team join
 -- -----------------------------------------------
 BFHub.JoinTeam = function(teamName)
     pcall(function() CommF_:InvokeServer("SetTeam", teamName or CFG.Team) end)
-    -- handle GUI prompt
     local gui = plr:FindFirstChild("PlayerGui")
     local main = gui and (gui:FindFirstChild("Main") or gui:FindFirstChild("Main (minimal)"))
     local choose = main and main:FindFirstChild("ChooseTeam")
@@ -163,7 +162,7 @@ BFHub.JoinTeam = function(teamName)
 end
 
 -- -----------------------------------------------
--- live status — collects level / beli / frags / current action
+-- live status
 -- -----------------------------------------------
 BFHub.Status = function()
     return {
@@ -184,14 +183,13 @@ BFHub.Status = function()
 end
 
 -- -----------------------------------------------
--- webhook — player join/leave, gacha, data log
+-- webhook
 -- -----------------------------------------------
 local function postWebhook(url, body)
     if not url or url == "" then return end
     task.spawn(function()
         pcall(function()
-            S.HS:PostAsync(url, S.HS:JSONEncode(body),
-                Enum.HttpContentType.ApplicationJson)
+            S.HS:PostAsync(url, S.HS:JSONEncode(body), Enum.HttpContentType.ApplicationJson)
         end)
     end)
 end
@@ -249,7 +247,6 @@ S.Players.PlayerRemoving:Connect(function(p)
     BFHub.Webhook.Player("left", p.Name, #S.Players:GetPlayers() - 1)
 end)
 
--- data log every 5 minutes
 BFHub.StartLoop("DataLog", function()
     if tick() - BFHub.Runtime.lastWebhook > 300 then
         BFHub.Runtime.lastWebhook = tick()
