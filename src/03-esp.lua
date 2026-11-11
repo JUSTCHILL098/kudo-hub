@@ -1,193 +1,214 @@
--- language: Lua, file: 03-esp.lua
-return function(Hub)
-    local Workspace = Hub.Workspace
-    local LP = Hub.LP
-    local CFG = Hub.CFG
-    local hrp = Hub.hrp
+-- language: Lua, file: src/03-esp.lua
+-- nine independent ESP pools — players, islands, fruits, chests, berries,
+-- dealers, mobs, items, pumpkins. Each toggle starts/stops its own loop.
 
-    local ESP_POOLS = {}
-    local function pool(key)
-        if not ESP_POOLS[key] then ESP_POOLS[key] = { objs = {} } end
-        return ESP_POOLS[key]
-    end
-    local function clear(key)
-        local p = pool(key)
-        for _, gui in pairs(p.objs) do pcall(function() gui:Destroy() end) end
-        p.objs = {}
-    end
+local CFG = BFHub.CFG
+local H   = BFHub.Helpers
+local WS  = BFHub.Services.WS
+local RS  = BFHub.Services.RS
+local CS  = BFHub.Services.CS
+local plr = BFHub.Services.Players.LocalPlayer
 
-    -- only return parts that have a proper geometry class (MeshPart or Model root)
-    -- never return a bare Part with a "Body" / "Torso" name — WindUI reads .Mesh on those
-    local function safe_anchor(obj)
-        if not obj or not obj.Parent then return nil end
-        if obj:IsA("Model") then
-            local h = obj:FindFirstChild("Head")
-            if h and h:IsA("MeshPart") then return h end
-            if h and h:IsA("BasePart") then return h end
-            local r = obj:FindFirstChild("HumanoidRootPart")
-            if r and r:IsA("BasePart") then return r end
-            local pp = obj.PrimaryPart
-            if pp and pp:IsA("BasePart") then return pp end
-            -- last resort: any MeshPart in the model
-            local mp = obj:FindFirstChildWhichIsA("MeshPart", true)
-            if mp then return mp end
-            return nil
-        end
-        if obj:IsA("MeshPart") then return obj end
-        if obj:IsA("BasePart") then
-            -- a bare Part is acceptable as Adornee for a BillboardGui, but
-            -- WindUI render pipeline reads .Mesh on it. skip unless it has a mesh child.
-            if obj:FindFirstChildWhichIsA("SpecialMesh")
-               or obj:FindFirstChildWhichIsA("BlockMesh")
-               or obj:FindFirstChildWhichIsA("CylinderMesh") then
-                return obj
-            end
-            return obj -- still returned; WindUI wrapper in 07-ui covers the render path
-        end
-        return nil
-    end
+local active = {}   -- key -> {folder, cat}
 
-    local function make(obj, key)
-        local p = pool(key)
-        local existing = p.objs[obj]
-        if existing and existing.Parent and existing.Adornee and existing.Adornee.Parent then
-            return existing
-        end
-        local anchor = safe_anchor(obj)
-        if not anchor then return nil end
-        local gui = Instance.new("BillboardGui")
-        gui.Name = "KUZ_ESP_"..key
-        gui.Adornee = anchor
-        gui.Size = UDim2.fromOffset(200, 50)
-        gui.StudsOffset = Vector3.new(0, 4, 0)
-        gui.AlwaysOnTop = true
-        gui.Parent = anchor
-        local tl = Instance.new("TextLabel", gui)
-        tl.Size = UDim2.fromScale(1, 1)
-        tl.BackgroundTransparency = 1
-        tl.TextScaled = true
-        tl.Font = Enum.Font.GothamBold
-        tl.TextStrokeTransparency = 0.3
-        tl.TextColor3 = CFG.esp[key].color
-        p.objs[obj] = gui
-        return gui
-    end
-
-    local function set_text(gui, lines)
-        if not gui or not gui.Parent then return end
-        local tl = gui:FindFirstChildOfClass("TextLabel")
-        if tl then tl.Text = table.concat(lines, "\n") end
-    end
-
-    local function is_player_model(obj)
-        for _, p in ipairs(Hub.Players:GetPlayers()) do
-            if p ~= LP and p.Character == obj then return true end
-        end
-        return false
-    end
-
-    local function scan(key, match_fn)
-        local cfg = CFG.esp[key]
-        if not cfg.on then clear(key); return end
-        local root = hrp(); if not root then return end
-        local seen = {}
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if (obj:IsA("Model") or obj:IsA("BasePart")) and match_fn(obj) then
-                local anchor = safe_anchor(obj)
-                if anchor and anchor.Parent then
-                    local d = (anchor.Position - root.Position).Magnitude
-                    if d < cfg.dist then
-                        seen[obj] = true
-                        local gui = make(obj, key)
-                        if gui and gui.Parent then
-                            local lines = { obj.Name }
-                            if cfg.dist_show ~= false then table.insert(lines, string.format("%d st", math.floor(d))) end
-                            local h = obj:FindFirstChildOfClass("Humanoid")
-                            if h and cfg.hp then table.insert(lines, string.format("HP %d", math.floor(h.Health))) end
-                            set_text(gui, lines)
-                        end
-                    end
-                end
-            end
-        end
-        for obj, gui in pairs(pool(key).objs) do
-            if not seen[obj] or not obj.Parent or not gui.Parent then
-                pcall(function() gui:Destroy() end)
-                pool(key).objs[obj] = nil
-            end
-        end
-    end
-
-    local function players_scan()
-        local cfg = CFG.esp.players
-        if not cfg.on then clear("players"); return end
-        local root = hrp(); if not root then return end
-        local seen = {}
-        for _, p in ipairs(Hub.Players:GetPlayers()) do
-            if p ~= LP and p.Character then
-                local h = p.Character:FindFirstChildOfClass("Humanoid")
-                local r = p.Character:FindFirstChild("HumanoidRootPart")
-                if h and h.Health > 0 and r then
-                    local d = (r.Position - root.Position).Magnitude
-                    if d < cfg.dist then
-                        seen[p.Character] = true
-                        local gui = make(p.Character, "players")
-                        if gui and gui.Parent then
-                            local lines = {}
-                            if cfg.name ~= false then table.insert(lines, p.Name) end
-                            if cfg.hp then table.insert(lines, string.format("HP %d", math.floor(h.Health))) end
-                            if cfg.dist_show ~= false then table.insert(lines, string.format("%d st", math.floor(d))) end
-                            set_text(gui, lines)
-                        end
-                    end
-                end
-            end
-        end
-        for obj, gui in pairs(pool("players").objs) do
-            if not seen[obj] or not gui.Parent then
-                pcall(function() gui:Destroy() end)
-                pool("players").objs[obj] = nil
-            end
-        end
-    end
-
-    local MATCH = {
-        islands = function(o) if not o:IsA("Model") then return false end
-            local n = o.Name
-            return n:find("Island") or n:find("Kingdom") or n:find("Village")
-                or n:find("Castle") or n:find("Fortress") or n:find("Dojo")
-                or n:find("Cafe") or n:find("Town") or n:find("Rose")
-                or n:find("City") or n:find("Prison") end,
-        fruits = function(o) if not o:IsA("Model") and not o:IsA("BasePart") then return false end
-            return o.Name:find("Fruit") or o.Name:find("BloxFruit") end,
-        chests = function(o) if not o:IsA("Model") and not o:IsA("BasePart") then return false end
-            return o.Name:find("Chest") end,
-        berries = function(o) if not o:IsA("Model") and not o:IsA("BasePart") then return false end
-            return o.Name:find("Berry") or o.Name:find("Berries") end,
-        dealers = function(o) if not o:IsA("Model") then return false end
-            return o.Name:find("Dealer") or o.Name:find("Vendor") or o.Name:find("Merchant") or o.Name:find("Barter") end,
-        mobs = function(o) if not o:IsA("Model") then return false end
-            if o == LP.Character or is_player_model(o) then return false end
-            local h = o:FindFirstChildOfClass("Humanoid")
-            return h and h.Health > 0 end,
-        items = function(o) if not o:IsA("Model") and not o:IsA("BasePart") then return false end
-            return o.Name:find("Item") or o.Name:find("Pickup") or o.Name:find("Drop") or o.Name:find("Material") end,
-        pumpkins = function(o) if not o:IsA("Model") then return false end
-            return o.Name == "Pumpkin" or o.Name:find("Pumpkin") end,
-    }
-
+local function label(part, color, fn, cat)
+    if not part or part:FindFirstChild("BFHubESP") then return end
+    local f = Instance.new("Folder", part); f.Name = "BFHubESP"
+    local bb = Instance.new("BillboardGui", f)
+    bb.Adornee = part
+    bb.Size = UDim2.new(0, 220, 0, 24)
+    bb.AlwaysOnTop = true
+    bb.StudsOffset = Vector3.new(0, (part.Size.Y / 2) + 2.2, 0)
+    bb.LightInfluence = 0
+    local lbl = Instance.new("TextLabel", bb)
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.TextColor3 = color
+    lbl.TextStrokeTransparency = 0.2
+    lbl.TextSize = 12
+    lbl.Font = Enum.Font.GothamBold
+    lbl.RichText = true
+    active[part] = { folder = f, cat = cat }
     task.spawn(function()
-        while true do
-            task.wait(1)
-            pcall(players_scan)
-            for key, fn in pairs(MATCH) do pcall(scan, key, fn) end
+        while f.Parent and part.Parent do
+            pcall(function() lbl.Text = fn() end)
+            task.wait(0.25)
         end
+        active[part] = nil
     end)
-
-    Hub.esp_pool = pool
-    Hub.esp_clear = clear
-    Hub.esp_scan = scan
-    Hub.esp_players_scan = players_scan
-    Hub.safe_anchor = safe_anchor
-    return Hub
 end
+
+local function clearPool(cat)
+    for part, data in pairs(active) do
+        if data.cat == cat then
+            pcall(function() data.folder:Destroy() end)
+            active[part] = nil
+        end
+    end
+end
+
+local function dist(p)
+    local hr = H.HRP(); if not hr then return 0 end
+    return math.floor((hr.Position - p).Magnitude)
+end
+
+-- pools
+local pools = {}
+
+pools.Players = function()
+    for _, p in ipairs(BFHub.Services.Players:GetPlayers()) do
+        if p ~= plr and p.Character then
+            local head = p.Character:FindFirstChild("Head")
+            if head then
+                local lvl = p:FindFirstChild("Data") and p.Data:FindFirstChild("Level")
+                label(head, Color3.fromRGB(255, 70, 70), function()
+                    return string.format("<b>%s</b> <font color='#FFD700'>[Lv.%s]</font> | %dm",
+                        p.DisplayName or p.Name, lvl and tostring(lvl.Value) or "?", dist(head.Position))
+                end, "Players")
+            end
+        end
+    end
+end
+
+pools.Islands = function()
+    local locs = WS:FindFirstChild("_WorldOrigin") and WS._WorldOrigin:FindFirstChild("Locations")
+    if not locs then return end
+    for _, p in ipairs(locs:GetChildren()) do
+        if p:IsA("BasePart") and p.Name ~= "Sea" then
+            label(p, Color3.fromRGB(100, 200, 255), function()
+                return string.format("<b>%s</b> | %d", p.Name, dist(p.Position))
+            end, "Islands")
+        end
+    end
+end
+
+pools.Fruits = function()
+    for _, m in ipairs(WS:GetChildren()) do
+        if m:IsA("Model") and m.Name:find("Fruit") then
+            local handle = m:FindFirstChild("Handle") or m.PrimaryPart
+            if handle then
+                label(handle, Color3.fromRGB(255, 170, 0), function()
+                    return string.format("Fruit: <b>%s</b> | %d", m.Name, dist(handle.Position))
+                end, "Fruits")
+            end
+        end
+    end
+end
+
+pools.Chests = function()
+    local cm = WS:FindFirstChild("ChestModels")
+    if not cm then return end
+    for _, c in ipairs(cm:GetChildren()) do
+        local rp = c:FindFirstChild("RootPart")
+        if rp then
+            label(rp, Color3.fromRGB(255, 255, 255), function()
+                return string.format("<b>%s</b> | %d", c.Name, dist(rp.Position))
+            end, "Chests")
+        end
+    end
+end
+
+pools.Berries = function()
+    for _, t in ipairs(CS:GetTagged("BerryBush")) do
+        local parent = t.Parent
+        if parent and parent:IsDescendantOf(WS) then
+            local pivot = parent:GetAttribute("CFrame") or (parent:IsA("Model") and parent:GetPivot())
+            if pivot and pivot.Position then
+                local anchor = parent:FindFirstChild("BFHubBerryAnchor")
+                if not anchor then
+                    anchor = Instance.new("Part")
+                    anchor.Name = "BFHubBerryAnchor"
+                    anchor.Anchored = true
+                    anchor.Transparency = 1
+                    anchor.CanCollide = false
+                    anchor.Size = Vector3.new(1, 1, 1)
+                    anchor.CFrame = pivot
+                    anchor.Parent = WS
+                end
+                label(anchor, Color3.fromRGB(255, 105, 180), function()
+                    return string.format("Berry | %d", dist(anchor.Position))
+                end, "Berries")
+            end
+        end
+    end
+end
+
+pools.Dealers = function()
+    local npcs = RS:FindFirstChild("NPCs")
+    if not npcs then return end
+    for _, n in ipairs(npcs:GetChildren()) do
+        if n.Name:find("Dealer") or n.Name:find("Cousin") then
+            local hr = n:FindFirstChild("HumanoidRootPart")
+            if hr then
+                label(hr, Color3.fromRGB(50, 205, 50), function()
+                    return string.format("<b>%s</b> | %d", n.Name, dist(hr.Position))
+                end, "Dealers")
+            end
+        end
+    end
+end
+
+pools.Mobs = function()
+    local enemies = WS:FindFirstChild("Enemies")
+    if not enemies then return end
+    for _, e in ipairs(enemies:GetChildren()) do
+        local hr = e:FindFirstChild("HumanoidRootPart")
+        local hum = e:FindFirstChildOfClass("Humanoid")
+        if hr and hum and hum.Health > 0 then
+            label(hr, Color3.fromRGB(255, 120, 120), function()
+                return string.format("%s [%d/%d]", e.Name, math.floor(hum.Health), math.floor(hum.MaxHealth))
+            end, "Mobs")
+        end
+    end
+end
+
+pools.Items = function()
+    for _, o in ipairs(WS:GetChildren()) do
+        if o.Name:find("DragonEgg") or o.Name:find("DinoBone") or o.Name == "EmberTemplate" then
+            local part = o:IsA("BasePart") and o or o:FindFirstChildWhichIsA("BasePart")
+            if part then
+                label(part, Color3.fromRGB(255, 140, 0), function()
+                    return string.format("<b>%s</b> | %d", o.Name, dist(part.Position))
+                end, "Items")
+            end
+        end
+    end
+end
+
+pools.Pumpkins = function()
+    for _, o in ipairs(WS:GetChildren()) do
+        if o.Name == "Pumpkin" or o.Name:find("Halloween") then
+            local part = o:IsA("BasePart") and o or o:FindFirstChildWhichIsA("BasePart")
+            if part then
+                label(part, Color3.fromRGB(255, 100, 0), function()
+                    return string.format("<b>%s</b> | %d", o.Name, dist(part.Position))
+                end, "Pumpkins")
+            end
+        end
+    end
+end
+
+BFHub.ESP = {}
+
+BFHub.ESP.Start = function(key)
+    if not pools[key] then return end
+    if not CFG.ESP[key] then return end
+    BFHub.StartLoop("ESP_" .. key, pools[key], key == "Players" and 0.25 or 1)
+end
+
+BFHub.ESP.Stop = function(key)
+    BFHub.StopLoop("ESP_" .. key)
+    clearPool(key)
+    -- clean stray berry anchors
+    if key == "Berries" then
+        for _, p in ipairs(WS:GetChildren()) do
+            if p.Name == "BFHubBerryAnchor" then pcall(function() p:Destroy() end) end
+        end
+    end
+end
+
+BFHub.ESP.Restart = function(key)
+    if CFG.ESP[key] then BFHub.ESP.Start(key) else BFHub.ESP.Stop(key) end
+end
+
+return true
