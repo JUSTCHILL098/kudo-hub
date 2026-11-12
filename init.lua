@@ -1,115 +1,150 @@
 -- language: Lua, file: init.lua
-local VERSION = "2026-11-11-i"
-if not game:IsLoaded() then repeat game.Loaded:Wait() until game:IsLoaded() end
-if getgenv().BFHubVersion == VERSION then
-    pcall(function()
-        game.StarterGui:SetCore("SendNotification", {Title="kuzunoha hub", Text="already loaded (" .. VERSION .. ")", Duration=3})
+-- NullExploits loader.
+-- Execute:
+--   loadstring(game:HttpGet("<your raw url>/init.lua"))()
+--
+-- Load order:
+--   01-config      (services, CFG, Helpers, Runtime, loop controller)  — hard require
+--   02-themes      (theme engine)
+--   03-esp         (nine ESP pools)
+--   04a-farm-data  (quest chains, boss table, material pools)
+--   04b-farm-core  (executable farm loops)
+--   05-teleport    (islands scan, portal routes, manual step)
+--   06-misc        (fps, gfx, gui, redeem, hop, webhook, status)
+--   07-ui          (WindUI window + all tabs except Settings/Discord)
+--   08-settings    (Settings + Discord, requires WindUI + 07)
+
+local BASE = (function()
+    local ok, src = pcall(function() return debug.info(1, "s") end)
+    if ok and type(src) == "string" and src:find("/") then
+        return src:match("^(.*)/[^/]+$")
+    end
+    return nil
+end)() or "NullExploits"
+
+-- =========================================================
+-- module loader with one retry on transient failure
+-- =========================================================
+local function loadModule(rel)
+    local url = BASE .. "/" .. rel
+    local chunk
+    local fetchOk = pcall(function()
+        chunk = game:HttpGet(url)
     end)
-    return
+    if not fetchOk or not chunk or #chunk < 40 then
+        return false, "fetch failed"
+    end
+
+    local fn, err = loadstring(chunk, "NullExploits/" .. rel)
+    if not fn then
+        return false, "compile: " .. tostring(err)
+    end
+
+    local runOk, ret = pcall(fn)
+    if not runOk then
+        return false, "runtime: " .. tostring(ret)
+    end
+    return true, ret
 end
-getgenv().BFHubVersion = VERSION
-getgenv().BFHub = getgenv().BFHub or {}
 
-local GITHUB_USER = "JUSTCHILL098"
-local GITHUB_REPO = "kudo-hub"
-BFHub.src = ("https://raw.githubusercontent.com/%s/%s/main/src/"):format(GITHUB_USER, GITHUB_REPO)
+local function loadWithRetry(rel, attempts)
+    attempts = attempts or 2
+    local lastErr
+    for i = 1, attempts do
+        local ok, err = loadModule(rel)
+        if ok then return true end
+        lastErr = err
+        if i < attempts then
+            warn("[NullExploits] retry " .. i .. " " .. rel .. ": " .. tostring(err))
+            task.wait(1.5)
+        end
+    end
+    warn("[NullExploits] failed " .. rel .. ": " .. tostring(lastErr))
+    return false
+end
 
-local BUST = "bust=" .. tostring(tick()) .. "&r=" .. tostring(math.random(1, 1e9))
+-- =========================================================
+-- kill any previous instance cleanly
+-- =========================================================
+pcall(function()
+    if NullExploits and NullExploits.ESP and NullExploits.ESP.DestroyAll then
+        NullExploits.ESP.DestroyAll()
+    end
+end)
+pcall(function()
+    local old = getgenv and getgenv().NullExploits
+    if old and old.UIWindow and old.UIWindow.Destroy then
+        old.UIWindow:Destroy()
+    end
+end)
 
-local order = {
-    { file = "a",                  chunk = "bfhub_a" },
-    { file = "02-themes",          chunk = "bfhub_02_themes" },
-    { file = "03-esp",             chunk = "bfhub_03_esp" },
-    { file = "04-farm",            chunk = "bfhub_04_farm" },
-    { file = "05-teleport",        chunk = "bfhub_05_teleport" },
-    { file = "06-misc",            chunk = "bfhub_06_misc" },
-    { file = "07-ui",              chunk = "bfhub_07_ui" },
-    { file = "08-settings-about",  chunk = "bfhub_08_settings" },
+-- =========================================================
+-- HARD REQUIRE: config (everything else needs it)
+-- =========================================================
+if not loadWithRetry("src/01-config.lua", 2) then
+    warn("[NullExploits] config failed — aborting")
+    return false
+end
+
+-- =========================================================
+-- SOFT MODULES: load in order, warn-and-continue on failure
+-- =========================================================
+local softOrder = {
+    "src/02-themes.lua",
+    "src/03-esp.lua",
+    "src/04a-farm-data.lua",
+    "src/04b-farm-core.lua",
+    "src/05-teleport.lua",
+    "src/06-misc.lua",
+    "src/07-ui.lua",
+    "src/08-settings-about.lua",
 }
 
--- ============================================================
--- fetch with content guard, size guard, retry
--- ============================================================
-local function fetch(url, attempts)
-    attempts = attempts or 3
-    local sep = url:find("?", 1, true) and "&" or "?"
-    local full = url .. sep .. BUST
-    for i = 1, attempts do
-        local ok, body = pcall(game.HttpGet, game, full)
-        if ok and type(body) == "string" and #body > 40 then
-            -- reject HTML / 404 / non-Lua bodies
-            local head = body:sub(1, 300)
-            local isHtml = head:find("<!DOCTYPE", 1, true) or head:find("<html", 1, true) or head:find("<!--", 1, true)
-            local isNotFound = head:find("404: Not Found", 1, true)
-            local looksLua = body:sub(1, 60):find("--", 1, true) ~= nil
-                     or body:sub(1, 60):find("local", 1, true) ~= nil
-                     or body:sub(1, 60):find("return", 1, true) ~= nil
-                     or body:sub(1, 60):find("BFHub", 1, true) ~= nil
-                     or body:sub(1, 60):find("if ", 1, true) ~= nil
-            if not isHtml and not isNotFound and looksLua then
-                return body
-            end
-        end
-        if i < attempts then task.wait(0.4 * i) end
-    end
-    return nil, "fetch failed after " .. attempts .. " attempts: " .. url
-end
-
--- ============================================================
--- WindUI
--- ============================================================
-local windOk, windBody = pcall(game.HttpGet, game,
-    "https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua?" .. BUST)
-if not windOk or type(windBody) ~= "string" or #windBody < 1000 then
-    warn("[BF Hub] WindUI fetch failed")
-    return
-end
-local windChunk = loadstring(windBody, "windui")
-if not windChunk then
-    warn("[BF Hub] WindUI compile failed")
-    return
-end
-local windRunOk, windUI = pcall(windChunk)
-if not windRunOk or not windUI then
-    warn("[BF Hub] WindUI init failed")
-    return
-end
-BFHub.WindUI = windUI
-
--- ============================================================
--- load modules
--- ============================================================
 local failed = {}
-for _, entry in ipairs(order) do
-    local url = BFHub.src .. entry.file .. ".lua"
-    local body, err = fetch(url)
-    if not body then
-        warn("[BF Hub] " .. entry.file .. ": " .. err)
-        failed[#failed+1] = entry.file
-    else
-        local chunk, compileErr = loadstring(body, entry.chunk)
-        if not chunk then
-            warn("[BF Hub] compile " .. entry.file .. ": " .. tostring(compileErr))
-            failed[#failed+1] = entry.file
-        else
-            local ok, runErr = pcall(chunk)
-            if not ok then
-                warn("[BF Hub] run " .. entry.file .. ": " .. tostring(runErr))
-                failed[#failed+1] = entry.file
-            end
-        end
+for _, rel in ipairs(softOrder) do
+    local ok = loadWithRetry(rel, 2)
+    if not ok then
+        table.insert(failed, rel)
     end
 end
 
-BFHub.Notify = function(title, text, dur)
-    pcall(function()
-        game.StarterGui:SetCore("SendNotification", {Title=title, Text=text, Duration=dur or 5})
-    end)
+-- =========================================================
+-- final summary
+-- =========================================================
+local loaded = #softOrder - #failed
+local total = #softOrder + 1 -- include config
+
+if NullExploits and NullExploits.Helpers and NullExploits.Helpers.Notify then
+    if #failed == 0 then
+        NullExploits.Helpers.Notify(
+            "NullExploits",
+            "loaded — " .. tostring(total) .. "/" .. tostring(total) .. " modules",
+            4
+        )
+    else
+        NullExploits.Helpers.Notify(
+            "NullExploits",
+            "loaded " .. tostring(loaded + 1) .. "/" .. tostring(total) .. " — " .. #failed .. " failed (see console)",
+            6
+        )
+    end
 end
 
 if #failed > 0 then
-    BFHub.Notify("BF Hub", "loaded with " .. #failed .. " failures: " .. table.concat(failed, ","), 8)
-    warn("[BF Hub] failed: " .. table.concat(failed, ", "))
-else
-    BFHub.Notify("BF Hub", "loaded — " .. #order .. " modules (" .. VERSION .. ")", 5)
+    warn("[NullExploits] failed modules:")
+    for _, rel in ipairs(failed) do
+        warn("  - " .. rel)
+    end
 end
+
+-- expose loader state for diagnostics
+if getgenv then
+    getgenv().NullExploitsLoaderState = {
+        base = BASE,
+        loaded = softOrder,
+        failed = failed,
+        loadedAt = tick(),
+    }
+end
+
+return true
