@@ -1,43 +1,78 @@
 -- language: Lua, file: src/03-esp.lua
--- nine independent ESP pools — players, islands, fruits, chests, berries,
--- dealers, mobs, items, pumpkins. Each toggle starts/stops its own loop.
+-- NullExploits :: ESP — nine pools (Players, Islands, Fruits, Chests, Berries,
+-- Dealers, Mobs, Items, Pumpkins). One label factory; one watch loop per pool.
+-- Depends on 01-config (Helpers, CFG, StartLoop, StopLoop, Runtime).
 
-local CFG = BFHub.CFG
-local H   = BFHub.Helpers
-local WS  = BFHub.Services.WS
-local RS  = BFHub.Services.RS
-local CS  = BFHub.Services.CS
-local plr = BFHub.Services.Players.LocalPlayer
+NullExploits = NullExploits or {}
+local CFG = NullExploits.CFG
+local H   = NullExploits.Helpers
+local S   = NullExploits.Services
+local WS  = S.WS
+local RS  = S.RS
+local CS  = S.CS
+local Players = S.Players
+local plr = Players.LocalPlayer
 
-local active = {}   -- key -> {folder, cat}
+local ESP = {}
+NullExploits.ESP = ESP
 
-local function label(part, color, fn, cat)
-    if not part or part:FindFirstChild("BFHubESP") then return end
-    local f = Instance.new("Folder", part); f.Name = "BFHubESP"
-    local bb = Instance.new("BillboardGui", f)
+-- active[part] = { folder, cat, kind="part"|"anchor", owner = model|part }
+local active = {}
+
+-- =========================================================
+-- label factory
+-- =========================================================
+local function makeLabel(part, color, fn, cat, opts)
+    opts = opts or {}
+    if not part or not part:IsA("BasePart") then return end
+    if part:FindFirstChild("NullExploitsESP") then return end
+
+    local f = Instance.new("Folder")
+    f.Name = "NullExploitsESP"
+    f.Parent = part
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "BB"
     bb.Adornee = part
-    bb.Size = UDim2.new(0, 220, 0, 24)
+    bb.Size = UDim2.new(0, 240, 0, 24)
     bb.AlwaysOnTop = true
-    bb.StudsOffset = Vector3.new(0, (part.Size.Y / 2) + 2.2, 0)
+    bb.StudsOffset = Vector3.new(0, (part.Size.Y / 2) + 2.4, 0)
     bb.LightInfluence = 0
-    local lbl = Instance.new("TextLabel", bb)
+    bb.MaxDistance = CFG.ESP.MaxDistance or 3000
+    bb.Parent = f
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Name = "L"
     lbl.BackgroundTransparency = 1
     lbl.Size = UDim2.new(1, 0, 1, 0)
-    lbl.TextColor3 = color
-    lbl.TextStrokeTransparency = 0.2
-    lbl.TextSize = 12
+    lbl.TextColor3 = color or Color3.fromRGB(255,255,255)
+    lbl.TextStrokeTransparency = 0.15
+    lbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+    lbl.TextSize = opts.textSize or 12
     lbl.Font = Enum.Font.GothamBold
     lbl.RichText = true
-    active[part] = { folder = f, cat = cat }
+    lbl.Text = ""
+    lbl.Parent = bb
+
+    active[part] = { folder = f, cat = cat, owner = opts.owner }
+
+    -- updater
     task.spawn(function()
-        while f.Parent and part.Parent do
-            pcall(function() lbl.Text = fn() end)
+        while f.Parent and part.Parent and CFG.ESP[cat] do
+            local ok, txt = pcall(fn)
+            if ok and type(txt) == "string" and lbl.Text ~= txt then
+                lbl.Text = txt
+            end
             task.wait(0.25)
         end
+        pcall(function() f:Destroy() end)
         active[part] = nil
     end)
 end
 
+-- =========================================================
+-- clearing
+-- =========================================================
 local function clearPool(cat)
     for part, data in pairs(active) do
         if data.cat == cat then
@@ -47,168 +82,270 @@ local function clearPool(cat)
     end
 end
 
-local function dist(p)
+local function dist(pos)
     local hr = H.HRP(); if not hr then return 0 end
-    return math.floor((hr.Position - p).Magnitude)
+    return math.floor((hr.Position - pos).Magnitude)
 end
 
--- pools
-local pools = {}
+local function fmtDist(pos)
+    local d = dist(pos)
+    if d >= 1000 then return string.format("%.1fkm", d/1000) end
+    return d .. "m"
+end
 
-pools.Players = function()
-    for _, p in ipairs(BFHub.Services.Players:GetPlayers()) do
+-- =========================================================
+-- helpers for reading data
+-- =========================================================
+local function safeRead(fn, fallback)
+    local ok, res = pcall(fn)
+    if ok and res ~= nil then return res end
+    return fallback
+end
+
+local function getLevel(p)
+    return safeRead(function()
+        local d = p:FindFirstChild("Data")
+        local l = d and d:FindFirstChild("Level")
+        return l and tostring(l.Value)
+    end, "?")
+end
+
+local function getHealth(m)
+    return safeRead(function()
+        local h = m:FindFirstChildOfClass("Humanoid")
+        if not h then return nil end
+        return math.floor(h.Health), math.floor(h.MaxHealth)
+    end)
+end
+
+-- =========================================================
+-- pools
+-- =========================================================
+local Pools = {}
+ESP.Pools = Pools
+
+-- players
+Pools.Players = function()
+    for _, p in ipairs(Players:GetPlayers()) do
         if p ~= plr and p.Character then
             local head = p.Character:FindFirstChild("Head")
             if head then
-                local lvl = p:FindFirstChild("Data") and p.Data:FindFirstChild("Level")
-                label(head, Color3.fromRGB(255, 70, 70), function()
-                    return string.format("<b>%s</b> <font color='#FFD700'>[Lv.%s]</font> | %dm",
-                        p.DisplayName or p.Name, lvl and tostring(lvl.Value) or "?", dist(head.Position))
-                end, "Players")
+                local color = CFG.ESP.ColorPlayers
+                makeLabel(head, color, function()
+                    local lv = getLevel(p)
+                    return string.format("<b>%s</b> <font color='#FFD700'>[Lv.%s]</font> | %s",
+                        p.DisplayName or p.Name, lv, fmtDist(head.Position))
+                end, "Players", { owner = p })
             end
         end
     end
 end
 
-pools.Islands = function()
-    local locs = WS:FindFirstChild("_WorldOrigin") and WS._WorldOrigin:FindFirstChild("Locations")
+-- islands (WorldOrigin.Locations)
+Pools.Islands = function()
+    local wo = WS:FindFirstChild("_WorldOrigin")
+    local locs = wo and wo:FindFirstChild("Locations")
     if not locs then return end
     for _, p in ipairs(locs:GetChildren()) do
         if p:IsA("BasePart") and p.Name ~= "Sea" then
-            label(p, Color3.fromRGB(100, 200, 255), function()
-                return string.format("<b>%s</b> | %d", p.Name, dist(p.Position))
-            end, "Islands")
+            local color = CFG.ESP.ColorIslands
+            makeLabel(p, color, function()
+                return string.format("<b>%s</b> | %s", p.Name, fmtDist(p.Position))
+            end, "Islands", { owner = p })
         end
     end
 end
 
-pools.Fruits = function()
+-- fruits (world models named Fruit*)
+Pools.Fruits = function()
     for _, m in ipairs(WS:GetChildren()) do
-        if m:IsA("Model") and m.Name:find("Fruit") then
+        if m:IsA("Model") and m.Name:find("Fruit") and not m.Name:find("FruitCustomizer") then
             local handle = m:FindFirstChild("Handle") or m.PrimaryPart
             if handle then
-                label(handle, Color3.fromRGB(255, 170, 0), function()
-                    return string.format("Fruit: <b>%s</b> | %d", m.Name, dist(handle.Position))
-                end, "Fruits")
+                local color = CFG.ESP.ColorFruits
+                makeLabel(handle, color, function()
+                    return string.format("Fruit: <b>%s</b> | %s", m.Name, fmtDist(handle.Position))
+                end, "Fruits", { owner = m })
             end
         end
     end
 end
 
-pools.Chests = function()
-    local cm = WS:FindFirstChild("ChestModels")
-    if not cm then return end
-    for _, c in ipairs(cm:GetChildren()) do
-        local rp = c:FindFirstChild("RootPart")
-        if rp then
-            label(rp, Color3.fromRGB(255, 255, 255), function()
-                return string.format("<b>%s</b> | %d", c.Name, dist(rp.Position))
-            end, "Chests")
+-- chests (CollectionService tag _ChestTagged)
+Pools.Chests = function()
+    for _, chest in ipairs(CS:GetTagged("_ChestTagged")) do
+        if chest:IsA("BasePart") and chest.Parent and not chest:GetAttribute("IsDisabled") then
+            local color = CFG.ESP.ColorChests
+            makeLabel(chest, color, function()
+                local price = safeRead(function() return chest:GetAttribute("Price") end, "")
+                local extra = price and price ~= "" and (" <font color='#FFD700'>$"..tostring(price).."</font>") or ""
+                return string.format("Chest%s | %s", extra, fmtDist(chest.Position))
+            end, "Chests", { owner = chest })
         end
     end
 end
 
-pools.Berries = function()
-    for _, t in ipairs(CS:GetTagged("BerryBush")) do
-        local parent = t.Parent
+-- berries (tag BerryBush)
+Pools.Berries = function()
+    for _, tag in ipairs(CS:GetTagged("BerryBush")) do
+        local parent = tag.Parent
         if parent and parent:IsDescendantOf(WS) then
-            local pivot = parent:GetAttribute("CFrame") or (parent:IsA("Model") and parent:GetPivot())
+            local pivot = safeRead(function()
+                return parent:GetAttribute("CFrame") or (parent:IsA("Model") and parent:GetPivot())
+            end)
             if pivot and pivot.Position then
-                local anchor = parent:FindFirstChild("BFHubBerryAnchor")
+                local anchor = parent:FindFirstChild("NullExploitsBerryAnchor")
                 if not anchor then
                     anchor = Instance.new("Part")
-                    anchor.Name = "BFHubBerryAnchor"
+                    anchor.Name = "NullExploitsBerryAnchor"
                     anchor.Anchored = true
                     anchor.Transparency = 1
                     anchor.CanCollide = false
-                    anchor.Size = Vector3.new(1, 1, 1)
+                    anchor.CanQuery = false
+                    anchor.CanTouch = false
+                    anchor.Size = Vector3.new(1,1,1)
                     anchor.CFrame = pivot
                     anchor.Parent = WS
                 end
-                label(anchor, Color3.fromRGB(255, 105, 180), function()
-                    return string.format("Berry | %d", dist(anchor.Position))
-                end, "Berries")
+                local color = CFG.ESP.ColorBerries
+                makeLabel(anchor, color, function()
+                    return "Berry | " .. fmtDist(anchor.Position)
+                end, "Berries", { owner = parent })
             end
         end
     end
 end
 
-pools.Dealers = function()
+-- dealers (ReplicatedStorage.NPCs named Dealer or Cousin)
+Pools.Dealers = function()
     local npcs = RS:FindFirstChild("NPCs")
     if not npcs then return end
     for _, n in ipairs(npcs:GetChildren()) do
         if n.Name:find("Dealer") or n.Name:find("Cousin") then
             local hr = n:FindFirstChild("HumanoidRootPart")
             if hr then
-                label(hr, Color3.fromRGB(50, 205, 50), function()
-                    return string.format("<b>%s</b> | %d", n.Name, dist(hr.Position))
-                end, "Dealers")
+                local color = CFG.ESP.ColorDealers
+                makeLabel(hr, color, function()
+                    return string.format("<b>%s</b> | %s", n.Name, fmtDist(hr.Position))
+                end, "Dealers", { owner = n })
             end
         end
     end
 end
 
-pools.Mobs = function()
+-- mobs (Workspace.Enemies)
+Pools.Mobs = function()
     local enemies = WS:FindFirstChild("Enemies")
     if not enemies then return end
     for _, e in ipairs(enemies:GetChildren()) do
         local hr = e:FindFirstChild("HumanoidRootPart")
         local hum = e:FindFirstChildOfClass("Humanoid")
         if hr and hum and hum.Health > 0 then
-            label(hr, Color3.fromRGB(255, 120, 120), function()
-                return string.format("%s [%d/%d]", e.Name, math.floor(hum.Health), math.floor(hum.MaxHealth))
-            end, "Mobs")
+            local color = CFG.ESP.ColorMobs
+            makeLabel(hr, color, function()
+                local h, mh = getHealth(e)
+                if not h then return e.Name end
+                return string.format("%s <font color='#FF6B6B'>[%d/%d]</font> | %s",
+                    e.Name, h, mh or 0, fmtDist(hr.Position))
+            end, "Mobs", { owner = e })
         end
     end
 end
 
-pools.Items = function()
+-- items (DragonEgg, DinoBone, EmberTemplate, etc.)
+Pools.Items = function()
+    local matchers = {"DragonEgg", "DinoBone", "EmberTemplate", "Hallow Essence", "Cursed Skull"}
     for _, o in ipairs(WS:GetChildren()) do
-        if o.Name:find("DragonEgg") or o.Name:find("DinoBone") or o.Name == "EmberTemplate" then
-            local part = o:IsA("BasePart") and o or o:FindFirstChildWhichIsA("BasePart")
-            if part then
-                label(part, Color3.fromRGB(255, 140, 0), function()
-                    return string.format("<b>%s</b> | %d", o.Name, dist(part.Position))
-                end, "Items")
+        for _, m in ipairs(matchers) do
+            if o.Name:find(m) then
+                local part = o:IsA("BasePart") and o or o:FindFirstChildWhichIsA("BasePart")
+                if part then
+                    local color = CFG.ESP.ColorItems
+                    makeLabel(part, color, function()
+                        return string.format("<b>%s</b> | %s", o.Name, fmtDist(part.Position))
+                    end, "Items", { owner = o })
+                end
+                break
             end
         end
     end
 end
 
-pools.Pumpkins = function()
+-- pumpkins (Halloween event)
+Pools.Pumpkins = function()
     for _, o in ipairs(WS:GetChildren()) do
         if o.Name == "Pumpkin" or o.Name:find("Halloween") then
             local part = o:IsA("BasePart") and o or o:FindFirstChildWhichIsA("BasePart")
             if part then
-                label(part, Color3.fromRGB(255, 100, 0), function()
-                    return string.format("<b>%s</b> | %d", o.Name, dist(part.Position))
-                end, "Pumpkins")
+                local color = CFG.ESP.ColorPumpkins
+                makeLabel(part, color, function()
+                    return string.format("<b>%s</b> | %s", o.Name, fmtDist(part.Position))
+                end, "Pumpkins", { owner = o })
             end
         end
     end
 end
 
-BFHub.ESP = {}
+-- =========================================================
+-- start / stop per-category
+-- =========================================================
+local intervals = {
+    Players = 0.25,
+    Islands = 1.0,
+    Fruits  = 0.5,
+    Chests  = 1.0,
+    Berries = 1.0,
+    Dealers = 1.0,
+    Mobs    = 0.5,
+    Items   = 1.0,
+    Pumpkins= 1.0,
+}
 
-BFHub.ESP.Start = function(key)
-    if not pools[key] then return end
-    if not CFG.ESP[key] then return end
-    BFHub.StartLoop("ESP_" .. key, pools[key], key == "Players" and 0.25 or 1)
+local function watchPool(cat)
+    local fn = Pools[cat]
+    if not fn then return end
+    NullExploits.StartLoop("ESP_" .. cat, fn, intervals[cat] or 1)
 end
 
-BFHub.ESP.Stop = function(key)
-    BFHub.StopLoop("ESP_" .. key)
-    clearPool(key)
-    -- clean stray berry anchors
-    if key == "Berries" then
+function ESP.Start(cat)
+    if not Pools[cat] then return end
+    if not CFG.ESP[cat] then return end
+    watchPool(cat)
+end
+
+function ESP.Stop(cat)
+    NullExploits.StopLoop("ESP_" .. cat)
+    clearPool(cat)
+    if cat == "Berries" then
         for _, p in ipairs(WS:GetChildren()) do
-            if p.Name == "BFHubBerryAnchor" then pcall(function() p:Destroy() end) end
+            if p.Name == "NullExploitsBerryAnchor" then pcall(function() p:Destroy() end) end
         end
     end
 end
 
-BFHub.ESP.Restart = function(key)
-    if CFG.ESP[key] then BFHub.ESP.Start(key) else BFHub.ESP.Stop(key) end
+function ESP.Restart(cat)
+    if CFG.ESP[cat] then ESP.Start(cat) else ESP.Stop(cat) end
 end
+
+function ESP.RestartAll()
+    for cat in pairs(Pools) do ESP.Restart(cat) end
+end
+
+function ESP.DestroyAll()
+    for cat in pairs(Pools) do ESP.Stop(cat) end
+    for part, data in pairs(active) do
+        pcall(function() data.folder:Destroy() end)
+    end
+    active = {}
+end
+
+-- =========================================================
+-- bootstrap: start anything already true in CFG
+-- =========================================================
+task.defer(function()
+    for cat in pairs(Pools) do
+        if CFG.ESP[cat] then ESP.Start(cat) end
+    end
+end)
 
 return true
