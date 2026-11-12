@@ -1,8 +1,8 @@
 -- language: Lua, file: src/05-teleport.lua
 -- NullExploits :: teleport
--- Island scan (auto-populates CFG.Teleport.IslandAnchors on every sea change),
--- custom-coordinate TP, NPC TP, player TP, fruit TP, portal routes,
--- manual step via keybind. Depends on 01-config.
+-- Island scan, custom-coordinate TP, NPC TP, player TP, fruit TP,
+-- portal routes, manual step. Depends on 01-config.
+-- FIX: TPIslandAuto now tweens CFrame, not BasePart.
 
 NullExploits = NullExploits or {}
 local CFG = NullExploits.CFG
@@ -18,7 +18,7 @@ local TP = {}
 NullExploits.Teleport = TP
 
 -- =========================================================
--- island anchor scan — rebuild on sea change
+-- island anchor scan
 -- =========================================================
 local function scanIslands()
     CFG.Teleport.IslandAnchors = {}
@@ -32,17 +32,14 @@ local function scanIslands()
     end
 end
 
--- first scan on load
 task.defer(scanIslands)
 
--- re-scan when the sea changes (character teleport / rejoin)
 local lastPlaceId = game.PlaceId
 NullExploits.StartLoop("TPIslandScan", function()
     if game.PlaceId ~= lastPlaceId then
         lastPlaceId = game.PlaceId
         scanIslands()
     end
-    -- also re-scan when the world origin reports a fresh island set
     local wo = WS:FindFirstChild("_WorldOrigin")
     local locs = wo and wo:FindFirstChild("Locations")
     if locs and #locs:GetChildren() ~= (function()
@@ -55,7 +52,7 @@ NullExploits.StartLoop("TPIslandScan", function()
 end, 10)
 
 -- =========================================================
--- core teleport API
+-- core teleport
 -- =========================================================
 function TP.Island(name)
     local anchor = CFG.Teleport.IslandAnchors[name]
@@ -118,22 +115,13 @@ function TP.NearestFruit()
     return false
 end
 
--- =========================================================
--- world TP (main / dressrosa / zou)
--- =========================================================
 function TP.World(sea)
-    if sea == "Sea1" then
-        pcall(function() CommF_:InvokeServer("TravelMain") end)
-    elseif sea == "Sea2" then
-        pcall(function() CommF_:InvokeServer("TravelDressrosa") end)
-    elseif sea == "Sea3" then
-        pcall(function() CommF_:InvokeServer("TravelZou") end)
+    if sea == "Sea1" then pcall(function() CommF_:InvokeServer("TravelMain") end)
+    elseif sea == "Sea2" then pcall(function() CommF_:InvokeServer("TravelDressrosa") end)
+    elseif sea == "Sea3" then pcall(function() CommF_:InvokeServer("TravelZou") end)
     end
 end
 
--- =========================================================
--- portal routes — requestEntrance with per-sea coords
--- =========================================================
 CFG.Teleport.PortalRoutes = {
     Sea1 = {
         Sky        = Vector3.new(-4607.82, 872.54, -1667.56),
@@ -149,7 +137,7 @@ CFG.Teleport.PortalRoutes = {
         MansionCafe    = Vector3.new(-12463, 374, -7550),
         HydraTeleport  = Vector3.new(5643.45, 1013.08, -340.51),
         CursedShip     = Vector3.new(5314.54, 22.56, -127.06),
-        TempleOfTime   = Vector3.new(28310.02, 14895.11, 109.45),
+        TempleOfTime   = Vector3.new(28210.02, 14895.11, 109.45),
         DragonDojo     = Vector3.new(5661.53, 1013.09, -334.96),
         CursedTemple   = Vector3.new(28286.35, 14896.50, 102.62),
     },
@@ -170,9 +158,6 @@ function TP.Portal(name)
     return true
 end
 
--- =========================================================
--- manual step — direct CFrame jump in a direction
--- =========================================================
 function TP.Step(direction, distance)
     distance = distance or 50
     local hr = H.HRP(); if not hr then return end
@@ -189,14 +174,14 @@ function TP.Step(direction, distance)
 end
 
 -- =========================================================
--- loops — only active when CFG has a target selected
+-- loops — FIXED: tween CFrame, not BasePart
 -- =========================================================
 NullExploits.StartLoop("TPIslandAuto", function()
     if CFG.Teleport.TPIsland == "" then return end
     local anchor = CFG.Teleport.IslandAnchors[CFG.Teleport.TPIsland]
     if not anchor or not anchor.Parent then return end
     if H.Dist(anchor.Position) < 15 then return end
-    H.Tween(anchor, 400)
+    H.Tween(CFrame.new(anchor.Position + Vector3.new(0, 30, 0)), 400)
 end, 1)
 
 NullExploits.StartLoop("TPNPCAuto", function()
@@ -221,10 +206,6 @@ NullExploits.StartLoop("TPPlayerAuto", function()
     end
 end, 1)
 
--- =========================================================
--- keybind: manual step (hold keybinds handled in 07-ui through
--- UserInputService; this file exposes the function only)
--- =========================================================
 S.UIS.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode.LeftControl then
@@ -232,14 +213,9 @@ S.UIS.InputBegan:Connect(function(input, processed)
     end
 end)
 
--- =========================================================
--- helpers used by the UI
--- =========================================================
 function TP.IslandNames()
     local out = {}
-    for name in pairs(CFG.Teleport.IslandAnchors) do
-        table.insert(out, name)
-    end
+    for name in pairs(CFG.Teleport.IslandAnchors) do table.insert(out, name) end
     table.sort(out)
     return out
 end
@@ -257,9 +233,7 @@ function TP.NPCNames()
     local npcs = RS:FindFirstChild("NPCs")
     local out = {}
     if npcs then
-        for _, n in ipairs(npcs:GetChildren()) do
-            table.insert(out, n.Name)
-        end
+        for _, n in ipairs(npcs:GetChildren()) do table.insert(out, n.Name) end
         table.sort(out)
     end
     return out
