@@ -1,7 +1,7 @@
 -- language: Lua, file: src/04b-farm-core.lua
 -- NullExploits :: farm core — executable loops.
--- Requires 04a-farm-data (CFG.QuestChains, BossTable, MaterialPools,
--- EventAnchors, ObservationSpots). Requires 01-config (Helpers, CFG).
+-- Requires 04a-farm-data. Requires 01-config.
+-- v2: event-week fallback in AutoFarmLevel/AutoFarmMob, robust fireHit.
 
 NullExploits = NullExploits or {}
 local CFG = NullExploits.CFG
@@ -22,7 +22,7 @@ if not Farm then
 end
 
 -- =========================================================
--- shared utilities
+-- shared
 -- =========================================================
 local function equipped()
     local c = H.Character(); if not c then return nil end
@@ -44,7 +44,6 @@ local function serverCall(...)
     end)
 end
 
--- quest title read from quest GUI (used by AutoFarm)
 local function currentQuestTitle()
     local pg = plr:FindFirstChild("PlayerGui")
     local main = pg and pg:FindFirstChild("Main")
@@ -56,13 +55,6 @@ local function currentQuestTitle()
     return lbl and lbl.Text or nil
 end
 
-local function currentQuestVisible()
-    local pg = plr:FindFirstChild("PlayerGui")
-    local main = pg and pg:FindFirstChild("Main")
-    local q = main and main:FindFirstChild("Quest")
-    return q and q.Visible
-end
-
 local function acceptQuest(questName, questLv)
     pcall(function() CommF_:InvokeServer("StartQuest", questName, questLv or 1) end)
 end
@@ -71,7 +63,6 @@ local function abandonQuest()
     pcall(function() CommF_:InvokeServer("AbandonQuest") end)
 end
 
--- tween to quest NPC then accept
 local function tweenToQuestAndAccept(entry)
     if not entry then return end
     local questCF = entry[6]
@@ -82,14 +73,13 @@ local function tweenToQuestAndAccept(entry)
     acceptQuest(entry[3], entry[4])
 end
 
--- find the first live enemy with name in pool
 local function findMob(nameOrPool, radius)
     radius = radius or CFG.Farm.BringRadius or 350
     return H.FindInNPCPool(nameOrPool, radius)
 end
 
 -- =========================================================
--- bring mobs (BodyPosition to our HRP)
+-- bring mobs
 -- =========================================================
 local bringPositions = {}
 
@@ -102,7 +92,7 @@ function Farm.BringMob(mob)
     if not existing then
         existing = Instance.new("BodyPosition")
         existing.Name = "NullExploitsBring"
-        existing.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        existing.MaxForce = Vector3.new(1e6, 1e6, 1e6)
         existing.P = 15000
         existing.D = 500
         existing.Parent = ehr
@@ -119,7 +109,7 @@ function Farm.StopBring()
 end
 
 -- =========================================================
--- attack — remote-based fast attack
+-- attack
 -- =========================================================
 local fastAttackCooldown = 0
 local function fireHit(target)
@@ -135,14 +125,13 @@ local function fireHit(target)
     local ok = pcall(function()
         local remoteAttack = Net:RemoteEvent("RegisterAttack")
         local remoteHit = Net:RemoteEvent("RegisterHit")
-        remoteAttack:FireServer(math.huge)
+        remoteAttack:FireServer(1e9)
         remoteHit:FireServer(head, {
             {target, head};
             head
         }, nil, userSub .. coroSub)
     end)
     if not ok then
-        -- fallback: use tool activation
         local tool = equipped()
         if tool then pcall(function() tool:Activate() end) end
     end
@@ -151,7 +140,6 @@ end
 function Farm.Attack(target)
     if not target then return end
     fireHit(target)
-    -- move close enough
     local ehr = target:FindFirstChild("HumanoidRootPart")
     if ehr then
         local dist = H.Dist(ehr.Position)
@@ -160,7 +148,7 @@ function Farm.Attack(target)
 end
 
 -- =========================================================
--- AUTO FARM LEVEL (quest chain)
+-- AUTO FARM LEVEL — with event-week fallback
 -- =========================================================
 function Farm.AutoFarmLevel()
     if not CFG.Farm.AutoFarm then return end
@@ -175,40 +163,46 @@ function Farm.AutoFarmLevel()
         return
     end
 
-    -- verify the active quest is the one for our level
     if not active:find(entry[8], 1, true) and not active:find("Defeat", 1, true) then
         abandonQuest()
         return
     end
 
     local mob, dist = findMob(entry[8], CFG.Farm.BringRadius)
+    if not mob then
+        -- FALLBACK: kill any enemy in radius (event weeks, renamed spawns)
+        mob, dist = H.FindNearestEnemy(CFG.Farm.BringRadius)
+    end
     if mob then
         if CFG.Farm.BringMobs then Farm.BringMob(mob) end
-        if dist > 30 then
-            H.Tween(mob:GetPivot(), 280)
+        if dist and dist > 30 then
+            local ehr = mob:FindFirstChild("HumanoidRootPart")
+            if ehr then H.Tween(ehr.CFrame * CFrame.new(0, 25, 0), 280) end
         end
         buso()
         Farm.Attack(mob)
     else
-        H.Tween(entry[7], 280)
+        -- no enemies at all — walk to the quest mob spawn point
+        if entry[7] then H.Tween(entry[7], 280) end
     end
 end
 
 -- =========================================================
--- AUTO FARM NEAREST (no quest)
+-- AUTO FARM NEAREST
 -- =========================================================
 function Farm.AutoFarmNearest()
     if not CFG.Farm.AutoFarmNearest then return end
     local mob, dist = H.FindNearestEnemy(CFG.Farm.BringRadius)
     if not mob then return end
     if CFG.Farm.BringMobs then Farm.BringMob(mob) end
-    if dist > 30 then H.Tween(mob:GetPivot(), 280) end
+    local ehr = mob:FindFirstChild("HumanoidRootPart")
+    if dist and dist > 30 and ehr then H.Tween(ehr.CFrame * CFrame.new(0, 25, 0), 280) end
     buso()
     Farm.Attack(mob)
 end
 
 -- =========================================================
--- AUTO FARM BOSS (single selected)
+-- AUTO FARM BOSS
 -- =========================================================
 function Farm.AutoFarmBoss()
     if not CFG.Farm.AutoBoss or not CFG.Farm.BossSelected then return end
@@ -231,7 +225,6 @@ function Farm.AutoFarmBoss()
         return
     end
 
-    -- boss not present: go to spawn / accept quest
     if boss.Quest and boss.Q_CF then
         if H.Dist(boss.Q_CF.Position) > 25 then
             H.Tween(boss.Q_CF, 300)
@@ -267,14 +260,20 @@ function Farm.AutoFarmAllBoss()
 end
 
 -- =========================================================
--- AUTO FARM MOB (specific)
+-- AUTO FARM MOB
 -- =========================================================
 function Farm.AutoFarmMob()
     if not CFG.Farm.MobKill or not CFG.Farm.MobSelected then return end
     local mob, dist = findMob(CFG.Farm.MobSelected, CFG.Farm.BringRadius)
+    if not mob then
+        mob, dist = H.FindNearestEnemy(CFG.Farm.BringRadius)
+    end
     if not mob then return end
     if CFG.Farm.BringMobs then Farm.BringMob(mob) end
-    if dist > 30 then H.Tween(mob:GetPivot(), 280) end
+    if dist and dist > 30 then
+        local ehr = mob:FindFirstChild("HumanoidRootPart")
+        if ehr then H.Tween(ehr.CFrame * CFrame.new(0, 25, 0), 280) end
+    end
     buso()
     Farm.Attack(mob)
 end
@@ -351,19 +350,12 @@ function Farm.AutoMastery()
     if not mob then return end
     local hum = mob:FindFirstChildOfClass("Humanoid")
     if not hum then return end
-    local pct = (hum.Health / math.max(hum.MaxHealth, 1)) * 100
-    if pct > (CFG.Farm.MasteryHP or 15) then
-        -- burst down: use current weapon
-        buso()
-        Farm.Attack(mob)
-    else
-        -- below threshold: mastery weapon
-        Farm.Attack(mob)
-    end
+    buso()
+    Farm.Attack(mob)
 end
 
 -- =========================================================
--- AUTO FARM BERRY (+hop)
+-- AUTO BERRY (+hop)
 -- =========================================================
 function Farm.AutoFarmBerry()
     if not CFG.Farm.AutoBerry then return end
@@ -418,7 +410,7 @@ function Farm.AutoFarmChest()
 end
 
 -- =========================================================
--- AUTO CHEST BYPASS — direct CFrame every chest, no touch events
+-- AUTO CHEST BYPASS
 -- =========================================================
 function Farm.AutoFarmChestBypass()
     if not CFG.Farm.AutoChestBypass then return end
@@ -430,9 +422,7 @@ function Farm.AutoFarmChestBypass()
             if d < bestD then best, bestD = chest, d end
         end
     end
-    if best then
-        hr.CFrame = best.CFrame
-    end
+    if best then hr.CFrame = best.CFrame end
 end
 
 -- =========================================================
@@ -461,7 +451,7 @@ function Farm.AutoFarmElite()
 end
 
 -- =========================================================
--- AUTO FACTORY RAID (Sea 2)
+-- AUTO FACTORY
 -- =========================================================
 function Farm.AutoFactory()
     if not CFG.Farm.AutoFactory then return end
@@ -478,13 +468,13 @@ function Farm.AutoFactory()
 end
 
 -- =========================================================
--- AUTO PIRATE RAID (Sea 3 castle center)
+-- AUTO PIRATE RAID
 -- =========================================================
 function Farm.AutoPirateRaid()
     if not CFG.Farm.AutoPirateRaid then return end
-    local enemies = WS:FindFirstChild("Enemies")
-    if not enemies then return end
+    local enemies = WS:FindFirstChild("Enemies"); if not enemies then return end
     local center = CFG.EventAnchors.PirateCastleCenter
+    if not center then return end
     for _, e in ipairs(enemies:GetChildren()) do
         if e.Name ~= "rip_indra True Form" and not e.Name:find("Boss") then
             local hr = e:FindFirstChild("HumanoidRootPart")
@@ -502,7 +492,7 @@ function Farm.AutoPirateRaid()
 end
 
 -- =========================================================
--- AUTO CAKE PRINCE + summon
+-- AUTO CAKE PRINCE
 -- =========================================================
 function Farm.AutoCakePrince()
     if not CFG.Farm.AutoCakePrince and not CFG.Farm.AutoCakePrinceSummon then return end
@@ -511,7 +501,7 @@ function Farm.AutoCakePrince()
         local ehr = mob:FindFirstChild("HumanoidRootPart")
         if ehr then
             local spawn = CFG.EventAnchors.CakePrinceSpawn
-            if H.Dist(spawn.Position) > 5 then
+            if spawn and H.Dist(spawn.Position) > 5 then
                 H.Tween(spawn, 300)
                 task.wait(0.3)
             end
@@ -521,20 +511,21 @@ function Farm.AutoCakePrince()
         end
         return
     end
-    -- summon
     if CFG.Farm.AutoCakePrinceSummon then
         local ok, res = pcall(function() return CommF_:InvokeServer("CakePrinceSpawner") end)
         if ok and type(res) == "string" and res:find("open the portal now") then
             pcall(function() CommF_:InvokeServer("CakePrinceSpawner") end)
         end
     end
-    -- grind cookies to trigger spawn
     local grindMob = H.FindInNPCPool({"Cookie Crafter", "Cake Guard", "Baking Staff"}, CFG.Farm.BringRadius)
     if grindMob then
-        if CFG.Farm.BringMobs then Farm.BringMob(grindMob) end
-        H.Tween(grindMob:GetPivot(), 280)
-        buso()
-        Farm.Attack(grindMob)
+        local ehr = grindMob:FindFirstChild("HumanoidRootPart")
+        if ehr then
+            if CFG.Farm.BringMobs then Farm.BringMob(grindMob) end
+            H.Tween(ehr.CFrame * CFrame.new(0, 25, 0), 280)
+            buso()
+            Farm.Attack(grindMob)
+        end
     else
         local anchor = CFG.EventAnchors.CakeGrindAnchor
         if anchor then H.Tween(anchor, 300) end
@@ -551,7 +542,7 @@ function Farm.AutoDoughKing()
         local ehr = mob:FindFirstChild("HumanoidRootPart")
         if ehr then
             local spawn = CFG.EventAnchors.DoughKingSpawn
-            if H.Dist(spawn.Position) > 5 then
+            if spawn and H.Dist(spawn.Position) > 5 then
                 H.Tween(spawn, 300)
                 task.wait(0.3)
             end
@@ -562,19 +553,17 @@ function Farm.AutoDoughKing()
         return
     end
     if CFG.Farm.AutoDoughKingFull then
-        -- try to build Sweet Chalice / grind route
         if H.HasTool("God's Chalice") then
             H.EquipTool("God's Chalice")
             H.Tween(CFG.EventAnchors.RipIndraGrave, 300)
             return
         end
-        -- grind cakes → chalice
         Farm.AutoCakePrince()
     end
 end
 
 -- =========================================================
--- AUTO TYRANT OF THE SKIES
+-- AUTO TYRANT
 -- =========================================================
 local tyrantEyeNames = {"Eye1", "Eye2", "Eye3", "Eye4"}
 function Farm.AutoTyrant()
@@ -589,20 +578,16 @@ function Farm.AutoTyrant()
         end
         return
     end
-
-    -- tiki outpost braziers
     local map = WS:FindFirstChild("Map")
     local tiki = map and map:FindFirstChild("TikiOutpost")
     if not tiki then
-        H.Tween(CFG.EventAnchors.TyrantAltar, 300)
+        if CFG.EventAnchors.TyrantAltar then H.Tween(CFG.EventAnchors.TyrantAltar, 300) end
         return
     end
-
     local model = tiki:FindFirstChild("IslandModel")
     local chunks = model and model:FindFirstChild("IslandChunks")
     local e = chunks and chunks:FindFirstChild("E")
     if not e then return end
-
     for _, name in ipairs(tyrantEyeNames) do
         local eye = model:FindFirstChild(name) or e:FindFirstChild(name)
         if eye and eye:IsA("BasePart") and eye.Transparency == 0 then
@@ -634,14 +619,14 @@ function Farm.AutoSoulReaper()
         return
     end
     if H.EquipTool("Hallow Essence") then
-        H.Tween(CFG.EventAnchors.SoulReaperAltar, 300)
+        if CFG.EventAnchors.SoulReaperAltar then H.Tween(CFG.EventAnchors.SoulReaperAltar, 300) end
     else
         Farm.AutoFarmBones()
     end
 end
 
 -- =========================================================
--- AUTO DARKBEARD
+-- AUTO DARKBEARD / GREYBEARD / CURSED CAPTAIN / RIP INDRA
 -- =========================================================
 function Farm.AutoDarkbeard()
     if not CFG.Farm.AutoDarkbeard then return end
@@ -656,13 +641,10 @@ function Farm.AutoDarkbeard()
         return
     end
     if H.EquipTool("Fist of Darkness") then
-        H.Tween(CFG.EventAnchors.DarkbeardAltar, 300)
+        if CFG.EventAnchors.DarkbeardAltar then H.Tween(CFG.EventAnchors.DarkbeardAltar, 300) end
     end
 end
 
--- =========================================================
--- AUTO GREYBEARD
--- =========================================================
 function Farm.AutoGreybeard()
     if not CFG.Farm.AutoGreybeard then return end
     local mob = H.FindInEnemies("Greybeard")
@@ -676,9 +658,6 @@ function Farm.AutoGreybeard()
     end
 end
 
--- =========================================================
--- AUTO CURSED CAPTAIN
--- =========================================================
 function Farm.AutoCursedCaptain()
     if not CFG.Farm.AutoCursedCaptain then return end
     local mob = H.FindInEnemies("Cursed Captain")
@@ -692,9 +671,6 @@ function Farm.AutoCursedCaptain()
     end
 end
 
--- =========================================================
--- AUTO RIP INDRA
--- =========================================================
 function Farm.AutoRipIndra()
     if not CFG.Farm.AutoRipIndra then return end
     local mob = H.FindInEnemies("rip_indra True Form")
@@ -709,34 +685,30 @@ function Farm.AutoRipIndra()
     end
     if H.HasTool("God's Chalice") then
         H.EquipTool("God's Chalice")
-        H.Tween(CFG.EventAnchors.RipIndraGrave, 300)
+        if CFG.EventAnchors.RipIndraGrave then H.Tween(CFG.EventAnchors.RipIndraGrave, 300) end
     else
-        H.Tween(CFG.EventAnchors.RipIndraSpawn, 300)
+        if CFG.EventAnchors.RipIndraSpawn then H.Tween(CFG.EventAnchors.RipIndraSpawn, 300) end
     end
 end
 
 -- =========================================================
--- AUTO OBSERVATION (Ken training at island per sea)
+-- AUTO OBSERVATION
 -- =========================================================
 function Farm.AutoObservation()
     if not CFG.Farm.AutoObservation then return end
     local sea = H.GetSea()
     local target = CFG.ObservationSpots[sea]
     if not target then return end
-
     if H.Dist(target.Position) > 60 then
         H.Tween(target, 300)
         return
     end
-
     local CommE = S.CommE
-    if CommE then
-        pcall(function() CommE:FireServer("Ken", true) end)
-    end
+    if CommE then pcall(function() CommE:FireServer("Ken", true) end) end
 end
 
 -- =========================================================
--- AUTO ECTOPLASM (chest + ship route)
+-- AUTO ECTOPLASM
 -- =========================================================
 function Farm.AutoEctoplasm()
     if not CFG.Farm.AutoEctoplasm then return end
@@ -744,7 +716,7 @@ function Farm.AutoEctoplasm()
 end
 
 -- =========================================================
--- KILL AURA — everything in range, always running
+-- KILL AURA
 -- =========================================================
 function Farm.KillAuraTick()
     if not CFG.Farm.KillAura then return end
@@ -762,7 +734,7 @@ function Farm.KillAuraTick()
 end
 
 -- =========================================================
--- FAST ATTACK — one global loop that hits anything near us
+-- FAST ATTACK — defensive, no crash on missing Character
 -- =========================================================
 function Farm.FastAttackTick()
     if not CFG.Farm.FastAttack then return end
@@ -777,13 +749,11 @@ function Farm.FastAttackTick()
         local ehr = e:FindFirstChild("HumanoidRootPart")
         if hum2 and hum2.Health > 0 and ehr then
             if (ehr.Position - hr.Position).Magnitude <= 60 then
-                -- clear stun / busy
                 local stun = c:FindFirstChild("Stun"); if stun then stun.Value = 0 end
                 local busy = c:FindFirstChild("Busy"); if busy then busy.Value = false end
                 local estun = e:FindFirstChild("Stun"); if estun then estun.Value = 0 end
                 local ebusy = e:FindFirstChild("Busy"); if ebusy then ebusy.Value = false end
-                -- toggle clashable
-                c:SetAttribute("Clashable", not c:GetAttribute("Clashable"))
+                pcall(function() c:SetAttribute("Clashable", not c:GetAttribute("Clashable")) end)
                 fireHit(e)
             end
         end
@@ -791,7 +761,7 @@ function Farm.FastAttackTick()
 end
 
 -- =========================================================
--- SYNC — the master loop controller
+-- SYNC
 -- =========================================================
 local loopMap = {
     AutoFarmLevel         = {cfg="AutoFarm",           interval=0.15, fn=Farm.AutoFarmLevel},
@@ -835,12 +805,10 @@ function Farm.SyncLoops()
     end
 end
 
--- called by the UI whenever a farm toggle changes
 function Farm.Refresh()
     Farm.SyncLoops()
 end
 
--- bootstrap any farm entries already true in CFG
 task.defer(function()
     task.wait(1.5)
     Farm.SyncLoops()
