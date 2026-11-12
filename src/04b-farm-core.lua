@@ -37,7 +37,11 @@ local function buso()
 end
 
 local function serverCall(...)
-    return pcall(function() CommF_:InvokeServer(...) end)
+    local args = { ... }
+    local n = select("#", ...)
+    return pcall(function()
+        CommF_:InvokeServer(table.unpack(args, 1, n))
+    end)
 end
 
 -- quest title read from quest GUI (used by AutoFarm)
