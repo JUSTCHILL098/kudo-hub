@@ -1,29 +1,15 @@
 -- language: Lua, file: init.lua
 -- NullExploits loader.
 -- Execute:
---   loadstring(game:HttpGet("<your raw url>/init.lua"))()
---
--- Load order:
---   01-config      (services, CFG, Helpers, Runtime, loop controller)  — hard require
---   02-themes      (theme engine)
---   03-esp         (nine ESP pools)
---   04a-farm-data  (quest chains, boss table, material pools)
---   04b-farm-core  (executable farm loops)
---   05-teleport    (islands scan, portal routes, manual step)
---   06-misc        (fps, gfx, gui, redeem, hop, webhook, status)
---   07-ui          (WindUI window + all tabs except Settings/Discord)
---   08-settings    (Settings + Discord, requires WindUI + 07)
-
-local BASE = (function()
-    local ok, src = pcall(function() return debug.info(1, "s") end)
-    if ok and type(src) == "string" and src:find("/") then
-        return src:match("^(.*)/[^/]+$")
-    end
-    return nil
-end)() or "NullExploits"
+--   loadstring(game:HttpGet("https://raw.githubusercontent.com/JUSTCHILL098/NullExploits/main/init.lua"))()
 
 -- =========================================================
--- module loader with one retry on transient failure
+-- BASE — hard-coded. Edit here if you ever move hosting.
+-- =========================================================
+local BASE = "https://raw.githubusercontent.com/JUSTCHILL098/NullExploits/main"
+
+-- =========================================================
+-- module loader — verbose errors
 -- =========================================================
 local function loadModule(rel)
     local url = BASE .. "/" .. rel
@@ -31,13 +17,23 @@ local function loadModule(rel)
     local fetchOk = pcall(function()
         chunk = game:HttpGet(url)
     end)
-    if not fetchOk or not chunk or #chunk < 40 then
-        return false, "fetch failed"
+
+    if not fetchOk then
+        return false, "HttpGet threw: " .. tostring(chunk) .. " | " .. url
+    end
+    if type(chunk) ~= "string" then
+        return false, "HttpGet returned " .. type(chunk) .. " (not string) | " .. url
+    end
+    if #chunk < 40 then
+        return false, "fetch too small (" .. #chunk .. "B) | " .. url
+    end
+    if chunk:sub(1, 6) == "<html>" or chunk:sub(1, 9) == "<!DOCTYPE" then
+        return false, "server returned HTML — 404 or private repo | " .. url
     end
 
     local fn, err = loadstring(chunk, "NullExploits/" .. rel)
     if not fn then
-        return false, "compile: " .. tostring(err)
+        return false, "compile: " .. tostring(err) .. " | first 80: " .. chunk:sub(1, 80)
     end
 
     local runOk, ret = pcall(fn)
@@ -64,7 +60,7 @@ local function loadWithRetry(rel, attempts)
 end
 
 -- =========================================================
--- kill any previous instance cleanly
+-- kill previous instance
 -- =========================================================
 pcall(function()
     if NullExploits and NullExploits.ESP and NullExploits.ESP.DestroyAll then
@@ -79,7 +75,33 @@ pcall(function()
 end)
 
 -- =========================================================
--- HARD REQUIRE: config (everything else needs it)
+-- PREFLIGHT: verify BASE before loading
+-- =========================================================
+do
+    print("[NullExploits] base URL: " .. BASE)
+    local probeUrl = BASE .. "/src/01-config.lua"
+    local ok, res = pcall(function() return game:HttpGet(probeUrl) end)
+    if not ok then
+        warn("[NullExploits] preflight failed: " .. tostring(res))
+        warn("[NullExploits] URL: " .. probeUrl)
+        warn("[NullExploits] check: open this URL in browser. If 404, check your repo path. If HTML, repo is private.")
+        return false
+    end
+    if type(res) ~= "string" or #res < 40 then
+        warn("[NullExploits] preflight bad response: " .. type(res) .. " (" .. (type(res) == "string" and #res or "?") .. "B)")
+        warn("[NullExploits] URL: " .. probeUrl)
+        return false
+    end
+    if res:sub(1, 6) == "<html>" or res:sub(1, 9) == "<!DOCTYPE" then
+        warn("[NullExploits] preflight got HTML — 404 or private repo")
+        warn("[NullExploits] URL: " .. probeUrl)
+        return false
+    end
+    print("[NullExploits] preflight OK — 01-config: " .. #res .. " bytes")
+end
+
+-- =========================================================
+-- HARD REQUIRE: config
 -- =========================================================
 if not loadWithRetry("src/01-config.lua", 2) then
     warn("[NullExploits] config failed — aborting")
@@ -87,7 +109,7 @@ if not loadWithRetry("src/01-config.lua", 2) then
 end
 
 -- =========================================================
--- SOFT MODULES: load in order, warn-and-continue on failure
+-- SOFT MODULES
 -- =========================================================
 local softOrder = {
     "src/02-themes.lua",
@@ -103,41 +125,28 @@ local softOrder = {
 local failed = {}
 for _, rel in ipairs(softOrder) do
     local ok = loadWithRetry(rel, 2)
-    if not ok then
-        table.insert(failed, rel)
-    end
+    if not ok then table.insert(failed, rel) end
 end
 
 -- =========================================================
--- final summary
+-- summary
 -- =========================================================
 local loaded = #softOrder - #failed
-local total = #softOrder + 1 -- include config
+local total = #softOrder + 1
 
 if NullExploits and NullExploits.Helpers and NullExploits.Helpers.Notify then
     if #failed == 0 then
-        NullExploits.Helpers.Notify(
-            "NullExploits",
-            "loaded — " .. tostring(total) .. "/" .. tostring(total) .. " modules",
-            4
-        )
+        NullExploits.Helpers.Notify("NullExploits", "loaded — " .. total .. "/" .. total .. " modules", 4)
     else
-        NullExploits.Helpers.Notify(
-            "NullExploits",
-            "loaded " .. tostring(loaded + 1) .. "/" .. tostring(total) .. " — " .. #failed .. " failed (see console)",
-            6
-        )
+        NullExploits.Helpers.Notify("NullExploits", "loaded " .. (loaded + 1) .. "/" .. total .. " — " .. #failed .. " failed", 6)
     end
 end
 
 if #failed > 0 then
     warn("[NullExploits] failed modules:")
-    for _, rel in ipairs(failed) do
-        warn("  - " .. rel)
-    end
+    for _, rel in ipairs(failed) do warn("  - " .. rel) end
 end
 
--- expose loader state for diagnostics
 if getgenv then
     getgenv().NullExploitsLoaderState = {
         base = BASE,
