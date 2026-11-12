@@ -97,4 +97,4 @@ fitted into the NullExploits module shape.
 Run in a Roblox executor that supports `loadstring`, `game:HttpGet`, `setclipboard`, and `writefile`.
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/<YOUR-USER>/<YOUR-REPO>/main/init.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/JUSTCHILL098/kudo-hub/main/init.lua"))()
