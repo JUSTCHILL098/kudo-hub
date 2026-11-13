@@ -1,8 +1,5 @@
 -- language: Lua, file: src/07-ui.lua
--- NullExploits :: UI — leaked-style front-end (option C)
--- 9 tabs using the leakD/Banana widget layout + WindUI lib wrapper.
--- Theme system: 17 presets, live-switchable from Settings tab.
--- Modules are stubbed — drop in real 01-config…06-misc later and calls re-bind.
+-- NullExploits :: UI — option C (leaked-style front-end), theme+lifecycle revision.
 
 NullExploits = NullExploits or {}
 local CFG = NullExploits.CFG or {}
@@ -23,6 +20,20 @@ local LP = Players.LocalPlayer
 local S = { Players = Players, RunSvc = RunService, TPS = TeleportService }
 NullExploits.Services = S
 
+-- UI lifecycle
+NullExploits.UI = NullExploits.UI or {}
+NullExploits.UI.Alive = true
+NullExploits.UI.Connections = {}
+NullExploits.UI.Loops = {}
+
+local function track(conn)
+    table.insert(NullExploits.UI.Connections, conn)
+    return conn
+end
+local function alive()
+    return NullExploits.UI.Alive == true
+end
+
 -- =========================================================
 -- CFG DEFAULTS
 -- =========================================================
@@ -38,7 +49,7 @@ local function deepDefault(tbl, d)
     return tbl
 end
 
-CFG.UI    = deepDefault(CFG.UI,    { OpenButton = true, Scale = 1.0 })
+CFG.UI    = deepDefault(CFG.UI,    { OpenButton = true, Size = "Default" })
 CFG.Theme = deepDefault(CFG.Theme, { Current = "Banana" })
 
 CFG.Farm = deepDefault(CFG.Farm, {
@@ -91,8 +102,13 @@ CFG.Raid = deepDefault(CFG.Raid, {
 })
 CFG.BossNameList  = CFG.BossNameList  or { "Kaido", "Dough King", "Rip Indra" }
 CFG.MobNameList   = CFG.MobNameList   or { Sea1={}, Sea2={}, Sea3={} }
-CFG.MaterialList  = CFG.MaterialList  or { "Leather + Scrap Metal","Angel Wings","Magma Ore","Fish Tail","Ectoplasm","Radioactive Material","Mystic Droplet","Vampire Fang","Scrap Metal","Demonic Wisp","Conjured Cocoa","Dragon Scale","Gunpowder","Mini Tusk" }
-CFG.BoatList      = CFG.BoatList      or { "Guardian","PirateGrandBrigade","MarineGrandBrigade","PirateBrigade","MarineBrigade","PirateSloop","MarineSloop","Beast Hunter" }
+CFG.MaterialList  = CFG.MaterialList  or {
+    "Leather + Scrap Metal","Angel Wings","Magma Ore","Fish Tail","Ectoplasm",
+    "Radioactive Material","Mystic Droplet","Vampire Fang","Scrap Metal",
+    "Demonic Wisp","Conjured Cocoa","Dragon Scale","Gunpowder","Mini Tusk" }
+CFG.BoatList      = CFG.BoatList      or {
+    "Guardian","PirateGrandBrigade","MarineGrandBrigade","PirateBrigade",
+    "MarineBrigade","PirateSloop","MarineSloop","Beast Hunter" }
 NullExploits.Runtime = NullExploits.Runtime or { sessionStart = tick() }
 
 -- =========================================================
@@ -100,7 +116,7 @@ NullExploits.Runtime = NullExploits.Runtime or { sessionStart = tick() }
 -- =========================================================
 local CONFIG_PATH = "NullExploits/config.json"
 local function ser(v)
-    if type(v) == "Color3" then return { __t = "Color3", R=v.R, G=v.G, B=v.B } end
+    if type(v) == "Color3" then return { __t="Color3", R=v.R, G=v.G, B=v.B } end
     return v
 end
 local function deser(v)
@@ -143,7 +159,7 @@ end
 local H = {}
 function H.GetSea()       return "Sea1" end
 function H.GetLevel()     return LP.Data and LP.Data.Level and LP.Data.Level.Value or 0 end
-function H.GetBeli()      return LP.Data and LP.Data.Beli  and LP.Data.Beli.Value  or 0 end
+function H.GetBeli()      return LP.Data and LP.Data.Beli and LP.Data.Beli.Value or 0 end
 function H.GetFragments() return LP.Data and LP.Data.Fragments and LP.Data.Fragments.Value or 0 end
 function H.GetRace()      return LP.Data and LP.Data.Race and LP.Data.Race.Value or "Human" end
 function H.HopServer()    pcall(function() TeleportService:Teleport(game.PlaceId, LP) end) end
@@ -166,58 +182,53 @@ local Misc = {
     CopyJobId=function() pcall(function() setclipboard(tostring(game.JobId)) end) end,
     UnlockFPS=function() end, LowGraphics=function() end,
     SetFullBright=function(v) pcall(function()
-        if v then
-            Lighting.Ambient = Color3.new(1,1,1)
-            Lighting.Brightness = 2
-        else
-            Lighting.Ambient = Color3.fromRGB(70,70,70)
-            Lighting.Brightness = 2
-        end
+        Lighting.Ambient = v and Color3.new(1,1,1) or Color3.fromRGB(70,70,70)
+        Lighting.Brightness = 2
     end) end,
-    SetNoFog=function(v) pcall(function()
-        Lighting.FogEnd = v and 1e9 or 10000
-    end) end,
+    SetNoFog=function(v) pcall(function() Lighting.FogEnd = v and 1e9 or 10000 end) end,
     SetHideChat=function(v) pcall(function()
-        game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Chat, not v)
-    end) end,
+        game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Chat, not v) end) end,
     SetHidePlayerList=function(v) pcall(function()
-        game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, not v)
-    end) end,
+        game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, not v) end) end,
     SetDisableNotifications=function(_) end,
     JoinTeam=function() end, RedeemCodes=function() end,
     WalkWater=function(v) pcall(function()
         local plane = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("WaterBase-Plane")
         if plane then plane.Size = v and Vector3.new(1000,112,1000) or Vector3.new(1000,80,1000) end
     end) end,
-    TimeOfDay=function(sel) pcall(function()
-        Lighting.ClockTime = (sel == "Night") and 0 or 12
-    end) end,
+    TimeOfDay=function(sel) pcall(function() Lighting.ClockTime = (sel == "Night") and 0 or 12 end) end,
 }
 NullExploits.Farm, NullExploits.ESP, NullExploits.Teleport, NullExploits.Misc = Farm, ESP, TP, Misc
 
 -- =========================================================
--- THEMES
+-- THEMES — now with gradients
 -- =========================================================
 local Themes = {}
 local themePresets = {
-    ["Banana"]        = { Accent="#FFC81E", Dialog="#16140C", Outline="#FFC81E", Text="#FFF8E1", Placeholder="#9C8F63", Background="#0E0C07", Button="#2A2410", Icon="#FFC81E" },
-    ["Custom Gray"]   = { Accent="#6E78C8", Dialog="#1B1B1F", Outline="#3A3D4D", Text="#E8E9F0", Placeholder="#83889E", Background="#15161A", Button="#262836", Icon="#6E78C8" },
-    ["Dark"]          = { Accent="#6E78C8", Dialog="#171717", Outline="#2E2E2E", Text="#ECECEC", Placeholder="#7A7A7A", Background="#111111", Button="#222222", Icon="#6E78C8" },
-    ["Midnight Blue"] = { Accent="#3B82F6", Dialog="#0F172A", Outline="#1E293B", Text="#E2E8F0", Placeholder="#64748B", Background="#0A0F1F", Button="#1E293B", Icon="#3B82F6" },
-    ["Crimson"]       = { Accent="#EF4444", Dialog="#1A0F0F", Outline="#7F1D1D", Text="#FEE2E2", Placeholder="#9C7A7A", Background="#120808", Button="#3F1515", Icon="#EF4444" },
-    ["Emerald"]       = { Accent="#10B981", Dialog="#0F1A14", Outline="#14532D", Text="#D1FAE5", Placeholder="#6B8B7C", Background="#08110D", Button="#14532D", Icon="#10B981" },
-    ["Purple Haze"]   = { Accent="#A855F7", Dialog="#180F22", Outline="#4C1D95", Text="#EDE9FE", Placeholder="#8B7BA0", Background="#0F0816", Button="#3B0764", Icon="#A855F7" },
-    ["Sunset"]        = { Accent="#F97316", Dialog="#1A120B", Outline="#7C2D12", Text="#FFEDD5", Placeholder="#9C7A5A", Background="#120A05", Button="#431407", Icon="#F97316" },
-    ["Rose Gold"]     = { Accent="#F43F5E", Dialog="#1A0F12", Outline="#9F1239", Text="#FFE4E6", Placeholder="#9C7A82", Background="#120A0C", Button="#4C0519", Icon="#F43F5E" },
-    ["Cyberpunk"]     = { Accent="#22D3EE", Dialog="#0B0F1A", Outline="#0E7490", Text="#CFFAFE", Placeholder="#5C8494", Background="#060A12", Button="#083344", Icon="#22D3EE" },
-    ["Blood Moon"]    = { Accent="#DC2626", Dialog="#0F0808", Outline="#7F1D1D", Text="#FECACA", Placeholder="#9C7A7A", Background="#080404", Button="#450A0A", Icon="#DC2626" },
-    ["Mint"]          = { Accent="#2DD4BF", Dialog="#0B1A18", Outline="#134E4A", Text="#CCFBF1", Placeholder="#6B8B87", Background="#06100F", Button="#134E4A", Icon="#2DD4BF" },
-    ["Amber"]         = { Accent="#F59E0B", Dialog="#1A1408", Outline="#78350F", Text="#FEF3C7", Placeholder="#9C8460", Background="#120D05", Button="#451A03", Icon="#F59E0B" },
-    ["Ocean"]         = { Accent="#0EA5E9", Dialog="#0A1622", Outline="#0C4A6E", Text="#E0F2FE", Placeholder="#5C7C94", Background="#050D14", Button="#082F49", Icon="#0EA5E9" },
-    ["Void"]          = { Accent="#8B5CF6", Dialog="#08060F", Outline="#4C1D95", Text="#EDE9FE", Placeholder="#7A6B96", Background="#050309", Button="#2E1065", Icon="#8B5CF6" },
-    ["Forest"]        = { Accent="#22C55E", Dialog="#0A140C", Outline="#14532D", Text="#DCFCE7", Placeholder="#6B8B77", Background="#050A06", Button="#14532D", Icon="#22C55E" },
-    ["Monochrome"]    = { Accent="#E5E7EB", Dialog="#0F0F0F", Outline="#404040", Text="#F5F5F5", Placeholder="#9C9C9C", Background="#080808", Button="#1F1F1F", Icon="#E5E7EB" },
-    ["Light"]         = { Accent="#2563EB", Dialog="#F5F5F7", Outline="#D1D5DB", Text="#111827", Placeholder="#6B7280", Background="#FFFFFF", Button="#E5E7EB", Icon="#2563EB" },
+    -- gradient themes are the headline ones
+    ["Blue Gradient"]   = { Accent="#3B82F6", Dialog="#0F172A", Outline="#1D4ED8", Text="#E2E8F0", Placeholder="#64748B", Background="#0A0F1F", Button="#1E293B", Icon="#3B82F6", Gradient={"#2563EB","#0EA5E9"} },
+    ["Red Gradient"]    = { Accent="#EF4444", Dialog="#1A0F0F", Outline="#991B1B", Text="#FEE2E2", Placeholder="#9C7A7A", Background="#120808", Button="#3F1515", Icon="#EF4444", Gradient={"#DC2626","#F97316"} },
+    ["Purple Gradient"] = { Accent="#A855F7", Dialog="#180F22", Outline="#6B21A8", Text="#EDE9FE", Placeholder="#8B7BA0", Background="#0F0816", Button="#3B0764", Icon="#A855F7", Gradient={"#8B5CF6","#EC4899"} },
+
+    -- legacy presets kept, each with a sensible gradient
+    ["Banana"]        = { Accent="#FFC81E", Dialog="#16140C", Outline="#FFC81E", Text="#FFF8E1", Placeholder="#9C8F63", Background="#0E0C07", Button="#2A2410", Icon="#FFC81E", Gradient={"#FFC81E","#FF7A00"} },
+    ["Custom Gray"]   = { Accent="#6E78C8", Dialog="#1B1B1F", Outline="#3A3D4D", Text="#E8E9F0", Placeholder="#83889E", Background="#15161A", Button="#262836", Icon="#6E78C8", Gradient={"#6E78C8","#43476E"} },
+    ["Dark"]          = { Accent="#6E78C8", Dialog="#171717", Outline="#2E2E2E", Text="#ECECEC", Placeholder="#7A7A7A", Background="#111111", Button="#222222", Icon="#6E78C8", Gradient={"#6E78C8","#2B2D42"} },
+    ["Midnight Blue"] = { Accent="#3B82F6", Dialog="#0F172A", Outline="#1E293B", Text="#E2E8F0", Placeholder="#64748B", Background="#0A0F1F", Button="#1E293B", Icon="#3B82F6", Gradient={"#1E40AF","#0EA5E9"} },
+    ["Crimson"]       = { Accent="#EF4444", Dialog="#1A0F0F", Outline="#7F1D1D", Text="#FEE2E2", Placeholder="#9C7A7A", Background="#120808", Button="#3F1515", Icon="#EF4444", Gradient={"#991B1B","#F43F5E"} },
+    ["Emerald"]       = { Accent="#10B981", Dialog="#0F1A14", Outline="#14532D", Text="#D1FAE5", Placeholder="#6B8B7C", Background="#08110D", Button="#14532D", Icon="#10B981", Gradient={"#065F46","#34D399"} },
+    ["Purple Haze"]   = { Accent="#A855F7", Dialog="#180F22", Outline="#4C1D95", Text="#EDE9FE", Placeholder="#8B7BA0", Background="#0F0816", Button="#3B0764", Icon="#A855F7", Gradient={"#6B21A8","#A855F7"} },
+    ["Sunset"]        = { Accent="#F97316", Dialog="#1A120B", Outline="#7C2D12", Text="#FFEDD5", Placeholder="#9C7A5A", Background="#120A05", Button="#431407", Icon="#F97316", Gradient={"#F97316","#FACC15"} },
+    ["Rose Gold"]     = { Accent="#F43F5E", Dialog="#1A0F12", Outline="#9F1239", Text="#FFE4E6", Placeholder="#9C7A82", Background="#120A0C", Button="#4C0519", Icon="#F43F5E", Gradient={"#F43F5E","#FBBF24"} },
+    ["Cyberpunk"]     = { Accent="#22D3EE", Dialog="#0B0F1A", Outline="#0E7490", Text="#CFFAFE", Placeholder="#5C8494", Background="#060A12", Button="#083344", Icon="#22D3EE", Gradient={"#22D3EE","#A855F7"} },
+    ["Blood Moon"]    = { Accent="#DC2626", Dialog="#0F0808", Outline="#7F1D1D", Text="#FECACA", Placeholder="#9C7A7A", Background="#080404", Button="#450A0A", Icon="#DC2626", Gradient={"#7F1D1D","#DC2626"} },
+    ["Mint"]          = { Accent="#2DD4BF", Dialog="#0B1A18", Outline="#134E4A", Text="#CCFBF1", Placeholder="#6B8B87", Background="#06100F", Button="#134E4A", Icon="#2DD4BF", Gradient={"#14B8A6","#2DD4BF"} },
+    ["Amber"]         = { Accent="#F59E0B", Dialog="#1A1408", Outline="#78350F", Text="#FEF3C7", Placeholder="#9C8460", Background="#120D05", Button="#451A03", Icon="#F59E0B", Gradient={"#D97706","#FBBF24"} },
+    ["Ocean"]         = { Accent="#0EA5E9", Dialog="#0A1622", Outline="#0C4A6E", Text="#E0F2FE", Placeholder="#5C7C94", Background="#050D14", Button="#082F49", Icon="#0EA5E9", Gradient={"#0284C7","#22D3EE"} },
+    ["Void"]          = { Accent="#8B5CF6", Dialog="#08060F", Outline="#4C1D95", Text="#EDE9FE", Placeholder="#7A6B96", Background="#050309", Button="#2E1065", Icon="#8B5CF6", Gradient={"#1E1B4B","#8B5CF6"} },
+    ["Forest"]        = { Accent="#22C55E", Dialog="#0A140C", Outline="#14532D", Text="#DCFCE7", Placeholder="#6B8B77", Background="#050A06", Button="#14532D", Icon="#22C55E", Gradient={"#166534","#22C55E"} },
+    ["Monochrome"]    = { Accent="#E5E7EB", Dialog="#0F0F0F", Outline="#404040", Text="#F5F5F5", Placeholder="#9C9C9C", Background="#080808", Button="#1F1F1F", Icon="#E5E7EB", Gradient={"#404040","#E5E7EB"} },
+    ["Light"]         = { Accent="#2563EB", Dialog="#F5F5F7", Outline="#D1D5DB", Text="#111827", Placeholder="#6B7280", Background="#FFFFFF", Button="#E5E7EB", Icon="#2563EB", Gradient={"#2563EB","#60A5FA"} },
 }
 
 local WindUI
@@ -249,18 +260,39 @@ end
 
 local activeWindow
 function Themes.SetWindow(w) activeWindow = w end
+
+-- The actual re-skin. Three layers, each wrapped so one failure doesn't
+-- stop the others. This is what makes switching visibly work.
 function Themes.Apply(name)
     local p = themePresets[name] or themePresets["Banana"]
-    pcall(function()
-        if activeWindow and activeWindow.SetTheme then
-            activeWindow:SetTheme(name)
-        end
-    end)
-    -- fallback accent push for executors where SetTheme is limited
+
+    -- 1) push every Config key individually (works on most WindUI builds)
     pcall(function()
         if activeWindow and activeWindow.Configs then
-            activeWindow.Configs.Accent = Color3.fromHex(p.Accent)
-            activeWindow.Configs.Background = Color3.fromHex(p.Background)
+            local c = activeWindow.Configs
+            c.Accent      = Color3.fromHex(p.Accent)
+            c.Dialog      = Color3.fromHex(p.Dialog)
+            c.Outline     = Color3.fromHex(p.Outline)
+            c.Text        = Color3.fromHex(p.Text)
+            c.Placeholder = Color3.fromHex(p.Placeholder)
+            c.Background  = Color3.fromHex(p.Background)
+            c.Button      = Color3.fromHex(p.Button)
+            c.Icon        = Color3.fromHex(p.Icon)
+        end
+    end)
+
+    -- 2) native theme switch (best case: whole palette re-skins)
+    pcall(function()
+        if activeWindow and activeWindow.SetTheme then activeWindow:SetTheme(name) end
+    end)
+
+    -- 3) OpenButton gradient — the thing you actually look at
+    pcall(function()
+        if activeWindow and activeWindow.OpenButton and p.Gradient then
+            activeWindow.OpenButton.Color = ColorSequence.new(
+                Color3.fromHex(p.Gradient[1]),
+                Color3.fromHex(p.Gradient[2])
+            )
         end
     end)
 end
@@ -288,7 +320,7 @@ NullExploits.WindUI = WindUI
 Themes.RegisterAll()
 
 -- =========================================================
--- LEAKED-STYLE lib WRAPPER (verbatim API, rebranded)
+-- LEAKED-STYLE lib WRAPPER
 -- =========================================================
 local HUB_NAME   = "NullExploits"
 local OPEN_IMAGE = "rbxassetid://5009915795"
@@ -303,16 +335,9 @@ local function safe(cb, ...)
 end
 
 local tabIcons = {
-    ["Info"]   = "info",
-    ["Farm"]   = "sword",
-    ["Combat"] = "target",
-    ["ESP"]    = "eye",
-    ["Teleport"] = "map-pin",
-    ["Misc"]   = "settings",
-    ["Raid"]   = "shield",
-    ["Shop"]   = "shopping-cart",
-    ["Settings"] = "palette",
-    ["About"]  = "info",
+    ["Info"]="info", ["Farm"]="sword", ["Combat"]="target", ["ESP"]="eye",
+    ["Teleport"]="map-pin", ["Misc"]="settings", ["Raid"]="shield",
+    ["Shop"]="shopping-cart", ["Settings"]="palette", ["About"]="info",
 }
 
 local function pick(a, b)
@@ -331,14 +356,12 @@ local function makeGroup(tab, name)
         local _, cfg = pick(a, b)
         local default = cfg.Default and true or false
         local t = container:Toggle({
-            Title = cfg.Text or "Toggle", Desc = cfg.Description,
-            Value = default,
+            Title = cfg.Text or "Toggle", Desc = cfg.Description, Value = default,
             Callback = function(v) safe(cfg.Callback, v) end,
         })
         if default then safe(cfg.Callback, true) end
         return t
     end
-
     function group:AddButton(a, b)
         local _, cfg = pick(a, b)
         local fn = cfg.Func or cfg.Callback
@@ -347,7 +370,6 @@ local function makeGroup(tab, name)
             Callback = function() safe(fn) end,
         })
     end
-
     function group:AddDropdown(a, b)
         local _, cfg = pick(a, b)
         local values = cfg.Values or {}
@@ -358,13 +380,13 @@ local function makeGroup(tab, name)
             initial = {}
             if type(default) == "table" then
                 for k, v in pairs(default) do
-                    if type(k) == "string" and v then table.insert(initial, k)
-                    elseif type(k) == "number" and type(v) == "string" then table.insert(initial, v) end
+                    if type(k)=="string" and v then table.insert(initial,k)
+                    elseif type(k)=="number" and type(v)=="string" then table.insert(initial,v) end
                 end
             end
         else
-            if type(default) == "number" then initial = values[default]
-            elseif type(default) == "string" then initial = default
+            if type(default)=="number" then initial = values[default]
+            elseif type(default)=="string" then initial = default
             else initial = values[1] end
         end
         local d = container:Dropdown({
@@ -375,40 +397,37 @@ local function makeGroup(tab, name)
                     local map = {}
                     if type(v) == "table" then
                         for k, val in pairs(v) do
-                            if type(val) == "string" then map[val] = true
-                            elseif type(k) == "string" and val then map[k] = true end
+                            if type(val)=="string" then map[val]=true
+                            elseif type(k)=="string" and val then map[k]=true end
                         end
                     end
                     safe(cfg.Callback, map)
                 else
-                    if type(v) == "table" then v = v.Title or v[1] end
+                    if type(v)=="table" then v = v.Title or v[1] end
                     safe(cfg.Callback, v)
                 end
             end,
         })
         if multi then
-            local map = {}; for _, k in ipairs(initial) do map[k] = true end
+            local map = {}; for _,k in ipairs(initial) do map[k]=true end
             safe(cfg.Callback, map)
         elseif initial ~= nil then safe(cfg.Callback, initial) end
         return d
     end
-
     function group:AddSlider(a, b)
         local _, cfg = pick(a, b)
         local rounding = cfg.Rounding or 0
-        local step = rounding > 0 and (1 / (10 ^ rounding)) or 1
+        local step = rounding > 0 and (1 / (10^rounding)) or 1
         if rounding == 1 then step = 1 end
         local default = cfg.Default or cfg.Min or 0
         local s = container:Slider({
-            Title = cfg.Text or "Slider", Desc = cfg.Description,
-            Step = step,
+            Title = cfg.Text or "Slider", Desc = cfg.Description, Step = step,
             Value = { Min = cfg.Min or 0, Max = cfg.Max or 100, Default = default },
             Callback = function(v) safe(cfg.Callback, v) end,
         })
         safe(cfg.Callback, default)
         return s
     end
-
     function group:AddInput(a, b)
         local _, cfg = pick(a, b)
         local i = container:Input({
@@ -419,24 +438,20 @@ local function makeGroup(tab, name)
         if cfg.Default and cfg.Default ~= "" then safe(cfg.Callback, cfg.Default) end
         return i
     end
-
     function group:AddLabel(text)
         local p = container:Paragraph({ Title = (text and text ~= "") and text or " " })
         local label = {}
         function label:SetText(t)
             t = (t and t ~= "") and t or " "
             pcall(function()
-                if p.SetTitle then p:SetTitle(t)
-                elseif p.SetDesc then p:SetDesc(t) end
+                if p.SetTitle then p:SetTitle(t) elseif p.SetDesc then p:SetDesc(t) end
             end)
         end
         return label
     end
-
     function group:AddDivider()
         pcall(function() container:Divider() end)
     end
-
     return group
 end
 
@@ -445,28 +460,24 @@ function lib:CreateWindow(cfg)
     local window
     local ok = pcall(function()
         window = WindUI:CreateWindow({
-            Title  = HUB_NAME,
-            Icon   = OPEN_IMAGE,
+            Title = HUB_NAME, Icon = OPEN_IMAGE,
             Author = "NullExploits  •  kaitun core",
             Folder = "NullExploits",
-            Size   = UDim2.fromOffset(620, 460),
-            Theme  = CFG.Theme.Current or "Banana",
+            Size = UDim2.fromOffset(620, 460),
+            Theme = CFG.Theme.Current or "Banana",
             Transparent = true, Resizable = true, SideBarWidth = 190,
             HideSearchBar = false, ScrollBarEnabled = true,
         })
     end)
     if not ok or not window then
-        window = WindUI:CreateWindow({
-            Title = HUB_NAME, Icon = OPEN_IMAGE,
-            Folder = "NullExploits", Theme = "Dark",
-        })
+        window = WindUI:CreateWindow({ Title=HUB_NAME, Icon=OPEN_IMAGE, Folder="NullExploits", Theme="Dark" })
     end
 
     pcall(function()
         window:EditOpenButton({
             Title = "Open NullExploits", Icon = OPEN_IMAGE,
             CornerRadius = UDim.new(0, 16), StrokeThickness = 2,
-            Color = ColorSequence.new(Color3.fromHex("#505eaa"), Color3.fromHex("#303b74")),
+            -- deliberately NOT colored here — Themes.Apply sets the gradient
             OnlyMobile = false,
             Enabled = CFG.UI.OpenButton ~= false,
             Draggable = true,
@@ -477,17 +488,30 @@ function lib:CreateWindow(cfg)
     end)
 
     Themes.SetWindow(window)
-    task.defer(function() pcall(Themes.Apply, CFG.Theme.Current or "Banana") end)
+
+    -- apply theme + size before we hand back
+    task.defer(function()
+        pcall(Themes.Apply, CFG.Theme.Current or "Banana")
+        local size = CFG.UI.Size or "Default"
+        local scale = ({ Small = 0.8, Default = 1.0, Large = 1.2, XL = 1.5 })[size] or 1.0
+        if window.SetUIScale then pcall(function() window:SetUIScale(scale) end) end
+    end)
+
+    -- lifecycle: closing the window must kill the script
+    local function onClose()
+        if NullExploits.UI.Kill then pcall(NullExploits.UI.Kill) end
+    end
+    pcall(function() if window.OnClose then window.OnClose = onClose end end)
+    pcall(function() if window.Closed then window.Closed:Connect(onClose) end end)
+    pcall(function() if window.OnCloseEvent then window.OnCloseEvent:Connect(onClose) end end)
 
     local winObj = {}
     function winObj:AddTab(name)
         local tab
-        local okT = pcall(function()
-            tab = window:Tab({ Title = name, Icon = tabIcons[name] or "circle" })
-        end)
+        local okT = pcall(function() tab = window:Tab({ Title = name, Icon = tabIcons[name] or "circle" }) end)
         if not okT or not tab then tab = window:Tab({ Title = name }) end
         local tabObj = {}
-        function tabObj:AddLeftGroupbox(n)  return makeGroup(tab, n) end
+        function tabObj:AddLeftGroupbox(n) return makeGroup(tab, n) end
         tabObj.AddRightGroupbox = tabObj.AddLeftGroupbox
         return tabObj
     end
@@ -509,31 +533,40 @@ end
 lib.ToggleUI = function() end
 
 -- =========================================================
--- BUILD WINDOW + 9 TABS
+-- KILL — tears down loops, connections, window, genv
+-- =========================================================
+function NullExploits.UI.Kill()
+    NullExploits.UI.Alive = false
+    for _, c in ipairs(NullExploits.UI.Connections) do
+        pcall(function() c:Disconnect() end)
+    end
+    NullExploits.UI.Connections = {}
+    NullExploits.UI.Loops = {}
+    pcall(function()
+        if activeWindow and activeWindow.Destroy then activeWindow:Destroy() end
+    end)
+    pcall(function()
+        if getgenv then getgenv().NullExploits = nil end
+    end)
+end
+
+-- =========================================================
+-- BUILD WINDOW + 10 TABS
 -- =========================================================
 local root = lib:CreateWindow({ Title = HUB_NAME, Subtitle = "Blox Fruits", Image = OPEN_IMAGE })
 local Tabs = {
-    Info     = root:AddTab("Info"),
-    Farm     = root:AddTab("Farm"),
-    Combat   = root:AddTab("Combat"),
-    ESP      = root:AddTab("ESP"),
-    Teleport = root:AddTab("Teleport"),
-    Misc     = root:AddTab("Misc"),
-    Raid     = root:AddTab("Raid"),
-    Shop     = root:AddTab("Shop"),
-    Settings = root:AddTab("Settings"),
-    About    = root:AddTab("About"),
+    Info=root:AddTab("Info"), Farm=root:AddTab("Farm"), Combat=root:AddTab("Combat"),
+    ESP=root:AddTab("ESP"), Teleport=root:AddTab("Teleport"), Misc=root:AddTab("Misc"),
+    Raid=root:AddTab("Raid"), Shop=root:AddTab("Shop"), Settings=root:AddTab("Settings"),
+    About=root:AddTab("About"),
 }
-
-local function bind(cfgTbl, key)
-    return function(v) cfgTbl[key] = v; NullExploits.SaveCfg() end
-end
+local function bind(cfgTbl, key) return function(v) cfgTbl[key]=v; NullExploits.SaveCfg() end end
 local function bindFn(cfgTbl, key, fn)
-    return function(v) cfgTbl[key] = v; pcall(fn, v); NullExploits.SaveCfg() end
+    return function(v) cfgTbl[key]=v; pcall(fn, v); NullExploits.SaveCfg() end
 end
 
 -- =========================================================
--- INFO TAB
+-- INFO
 -- =========================================================
 local infoSec = Tabs.Info:AddLeftGroupbox("Status")
 local lblJob   = infoSec:AddLabel("JobId: …")
@@ -548,12 +581,13 @@ local lblAge   = infoSec:AddLabel("Session Age: …")
 
 task.spawn(function()
     local frames, lastTick, fps = 0, tick(), 0
-    RunService.RenderStepped:Connect(function()
+    track(RunService.RenderStepped:Connect(function()
         frames = frames + 1
         if tick() - lastTick >= 1 then fps = frames; frames = 0; lastTick = tick() end
-    end)
-    while true do
+    end))
+    while alive() do
         task.wait(1)
+        if not alive() then break end
         lblJob:SetText("JobId: " .. game.JobId)
         lblSea:SetText("Sea: " .. H.GetSea())
         lblLevel:SetText("Level: " .. tostring(H.GetLevel()))
@@ -570,126 +604,93 @@ task.spawn(function()
 end)
 
 local infoAct = Tabs.Info:AddLeftGroupbox("Actions")
-infoAct:AddButton({ Text = "Copy JobId", Func = function() Misc.CopyJobId() end })
-infoAct:AddButton({ Text = "Hop Server", Func = function() H.HopServer() end })
-infoAct:AddButton({ Text = "Hop Low Player Server", Func = function() H.HopLowServer(10) end })
-infoAct:AddButton({ Text = "Rejoin", Func = function() pcall(function() TeleportService:Teleport(game.PlaceId, LP) end) end })
+infoAct:AddButton({ Text="Copy JobId", Func=function() Misc.CopyJobId() end })
+infoAct:AddButton({ Text="Hop Server", Func=function() H.HopServer() end })
+infoAct:AddButton({ Text="Hop Low Player Server", Func=function() H.HopLowServer(10) end })
+infoAct:AddButton({ Text="Rejoin", Func=function() pcall(function() TeleportService:Teleport(game.PlaceId, LP) end) end })
 
 -- =========================================================
--- FARM TAB
+-- FARM
 -- =========================================================
 local farmRefresh = function() if Farm and Farm.Refresh then pcall(Farm.Refresh) end end
-
 local AF = Tabs.Farm:AddLeftGroupbox("Auto Farm")
-local farmToggles = {
-    {"AutoFarm", "Auto Farm Level", "Quest-driven leveling through all three seas"},
-    {"AutoFarmNearest", "Auto Farm Nearest", "Kill whatever's closest, no quests"},
-    {"AutoBoss", "Auto Farm Boss (selected)"},
-    {"AutoAllBoss", "Auto Farm All Bosses"},
-    {"BringMobs", "Bring Mobs", "BodyPosition pulls mobs to you"},
-    {"FastAttack", "Fast Attack"},
-    {"KillAura", "Kill Aura"},
-}
-for _, t in ipairs(farmToggles) do
-    AF:AddToggle(t[1], {
-        Text = t[2], Description = t[3], Default = CFG.Farm[t[1]],
-        Callback = bindFn(CFG.Farm, t[1], farmRefresh),
-    })
+for _, t in ipairs({
+    {"AutoFarm","Auto Farm Level","Quest-driven leveling through all three seas"},
+    {"AutoFarmNearest","Auto Farm Nearest","Kill whatever's closest, no quests"},
+    {"AutoBoss","Auto Farm Boss (selected)"},
+    {"AutoAllBoss","Auto Farm All Bosses"},
+    {"BringMobs","Bring Mobs","BodyPosition pulls mobs to you"},
+    {"FastAttack","Fast Attack"},
+    {"KillAura","Kill Aura"},
+}) do
+    AF:AddToggle(t[1], { Text=t[2], Description=t[3], Default=CFG.Farm[t[1]], Callback=bindFn(CFG.Farm, t[1], farmRefresh) })
 end
 
 local Sel = Tabs.Farm:AddLeftGroupbox("Target Selection")
-Sel:AddDropdown("Boss", {
-    Text = "Boss", Values = CFG.BossNameList or {},
-    Default = CFG.Farm.BossSelected ~= "" and CFG.Farm.BossSelected or 1,
-    Callback = bind(CFG.Farm, "BossSelected"),
-})
-Sel:AddDropdown("Mob", {
-    Text = "Mob (this sea)", Values = (CFG.MobNameList and CFG.MobNameList[H.GetSea()]) or {},
-    Default = CFG.Farm.MobSelected ~= "" and CFG.Farm.MobSelected or 1,
-    Callback = bind(CFG.Farm, "MobSelected"),
-})
-Sel:AddDropdown("Material", {
-    Text = "Material", Values = CFG.MaterialList or {},
-    Default = CFG.Farm.MaterialSelected,
-    Callback = bind(CFG.Farm, "MaterialSelected"),
-})
+Sel:AddDropdown("Boss", { Text="Boss", Values=CFG.BossNameList or {},
+    Default=CFG.Farm.BossSelected~="" and CFG.Farm.BossSelected or 1, Callback=bind(CFG.Farm, "BossSelected") })
+Sel:AddDropdown("Mob", { Text="Mob (this sea)",
+    Values=(CFG.MobNameList and CFG.MobNameList[H.GetSea()]) or {},
+    Default=CFG.Farm.MobSelected~="" and CFG.Farm.MobSelected or 1, Callback=bind(CFG.Farm, "MobSelected") })
+Sel:AddDropdown("Material", { Text="Material", Values=CFG.MaterialList or {},
+    Default=CFG.Farm.MaterialSelected, Callback=bind(CFG.Farm, "MaterialSelected") })
 
 local Tools = Tabs.Farm:AddLeftGroupbox("Farm Tools")
-local toolList = {
-    {"AutoMaterial", "Auto Material"},
-    {"AutoBones", "Auto Bones"},
-    {"AutoCakes", "Auto Cakes"},
-    {"AutoMastery", "Auto Mastery", "Burst down mobs to HP% threshold, then use mastery weapon"},
-}
-for _, t in ipairs(toolList) do
-    Tools:AddToggle(t[1], { Text=t[2], Description=t[3], Default=CFG.Farm[t[1]],
-        Callback = bindFn(CFG.Farm, t[1], farmRefresh) })
+for _, t in ipairs({
+    {"AutoMaterial","Auto Material"},
+    {"AutoBones","Auto Bones"},
+    {"AutoCakes","Auto Cakes"},
+    {"AutoMastery","Auto Mastery","Burst down mobs to HP% threshold, then use mastery weapon"},
+}) do
+    Tools:AddToggle(t[1], { Text=t[2], Description=t[3], Default=CFG.Farm[t[1]], Callback=bindFn(CFG.Farm, t[1], farmRefresh) })
     if t[1] == "AutoMastery" then
-        Tools:AddSlider("MasteryHP", {
-            Text = "Mastery HP Threshold %",
-            Min = 5, Max = 95, Default = CFG.Farm.MasteryHP or 70,
-            Rounding = 0, Callback = bind(CFG.Farm, "MasteryHP"),
-        })
+        Tools:AddSlider("MasteryHP", { Text="Mastery HP Threshold %", Min=5, Max=95,
+            Default=CFG.Farm.MasteryHP or 70, Rounding=0, Callback=bind(CFG.Farm, "MasteryHP") })
     end
 end
-local toolList2 = {
-    {"AutoBerry", "Auto Berry"},
-    {"AutoBerryHop", "Auto Berry + Hop"},
-    {"AutoChest", "Auto Chest"},
-    {"AutoChestBypass", "Auto Chest Bypass", "Direct CFrame — no touch events"},
-    {"AutoElite", "Auto Elite"},
-    {"AutoEliteHop", "Auto Elite + Hop"},
-}
-for _, t in ipairs(toolList2) do
-    Tools:AddToggle(t[1], { Text=t[2], Description=t[3], Default=CFG.Farm[t[1]],
-        Callback = bindFn(CFG.Farm, t[1], farmRefresh) })
+for _, t in ipairs({
+    {"AutoBerry","Auto Berry"}, {"AutoBerryHop","Auto Berry + Hop"},
+    {"AutoChest","Auto Chest"}, {"AutoChestBypass","Auto Chest Bypass","Direct CFrame — no touch events"},
+    {"AutoElite","Auto Elite"}, {"AutoEliteHop","Auto Elite + Hop"},
+}) do
+    Tools:AddToggle(t[1], { Text=t[2], Description=t[3], Default=CFG.Farm[t[1]], Callback=bindFn(CFG.Farm, t[1], farmRefresh) })
 end
 
 local Events = Tabs.Farm:AddLeftGroupbox("Event Farms")
-local evList = {
-    {"AutoFactory", "Auto Factory Raid"},
-    {"AutoPirateRaid", "Auto Pirate Raid"},
-    {"AutoCakePrince", "Auto Cake Prince"},
-    {"AutoCakePrinceSummon", "Auto Cake Prince Summon"},
-    {"AutoDoughKing", "Auto Dough King"},
-    {"AutoDoughKingFull", "Auto Dough King (Full Route)"},
-    {"AutoTyrant", "Auto Tyrant of the Skies"},
-    {"AutoSoulReaper", "Auto Soul Reaper"},
-    {"AutoDarkbeard", "Auto Darkbeard"},
-    {"AutoGreybeard", "Auto Greybeard"},
-    {"AutoCursedCaptain", "Auto Cursed Captain"},
-    {"AutoRipIndra", "Auto Rip Indra"},
-    {"AutoObservation", "Auto Observation Training"},
-}
-for _, t in ipairs(evList) do
-    Events:AddToggle(t[1], { Text=t[2], Default=CFG.Farm[t[1]],
-        Callback = bindFn(CFG.Farm, t[1], farmRefresh) })
+for _, t in ipairs({
+    {"AutoFactory","Auto Factory Raid"}, {"AutoPirateRaid","Auto Pirate Raid"},
+    {"AutoCakePrince","Auto Cake Prince"}, {"AutoCakePrinceSummon","Auto Cake Prince Summon"},
+    {"AutoDoughKing","Auto Dough King"}, {"AutoDoughKingFull","Auto Dough King (Full Route)"},
+    {"AutoTyrant","Auto Tyrant of the Skies"}, {"AutoSoulReaper","Auto Soul Reaper"},
+    {"AutoDarkbeard","Auto Darkbeard"}, {"AutoGreybeard","Auto Greybeard"},
+    {"AutoCursedCaptain","Auto Cursed Captain"}, {"AutoRipIndra","Auto Rip Indra"},
+    {"AutoObservation","Auto Observation Training"},
+}) do
+    Events:AddToggle(t[1], { Text=t[2], Default=CFG.Farm[t[1]], Callback=bindFn(CFG.Farm, t[1], farmRefresh) })
 end
 
 -- =========================================================
--- COMBAT TAB
+-- COMBAT
 -- =========================================================
 local Aim = Tabs.Combat:AddLeftGroupbox("Aimbot")
 Aim:AddToggle("Aimbot", { Text="Aimbot", Default=CFG.Combat.Aimbot, Callback=bind(CFG.Combat, "Aimbot") })
-Aim:AddDropdown("AimTarget", {
-    Text = "Target Bone", Values = { "Head","HumanoidRootPart","UpperTorso","LowerTorso" },
-    Default = CFG.Combat.AimTarget or "Head", Callback = bind(CFG.Combat, "AimTarget"),
-})
-Aim:AddSlider("AimFOV", { Text="FOV", Min=30, Max=360, Default=CFG.Combat.AimFOV or 180,
-    Rounding=0, Callback=bind(CFG.Combat, "AimFOV") })
+Aim:AddDropdown("AimTarget", { Text="Target Bone",
+    Values={"Head","HumanoidRootPart","UpperTorso","LowerTorso"},
+    Default=CFG.Combat.AimTarget or "Head", Callback=bind(CFG.Combat, "AimTarget") })
+Aim:AddSlider("AimFOV", { Text="FOV", Min=30, Max=360, Default=CFG.Combat.AimFOV or 180, Rounding=0, Callback=bind(CFG.Combat, "AimFOV") })
 Aim:AddSlider("AimSmooth", { Text="Smooth (1 = instant)", Min=1, Max=10,
-    Default=math.floor((CFG.Combat.AimSmooth or 1.0) * 10), Rounding=0,
-    Callback=function(v) CFG.Combat.AimSmooth = v / 10; NullExploits.SaveCfg() end })
+    Default=math.floor((CFG.Combat.AimSmooth or 1.0)*10), Rounding=0,
+    Callback=function(v) CFG.Combat.AimSmooth=v/10; NullExploits.SaveCfg() end })
 Aim:AddSlider("AimPrediction", { Text="Prediction", Min=0, Max=50,
-    Default=math.floor((CFG.Combat.AimPrediction or 0.16) * 100), Rounding=0,
-    Callback=function(v) CFG.Combat.AimPrediction = v / 100; NullExploits.SaveCfg() end })
+    Default=math.floor((CFG.Combat.AimPrediction or 0.16)*100), Rounding=0,
+    Callback=function(v) CFG.Combat.AimPrediction=v/100; NullExploits.SaveCfg() end })
 Aim:AddToggle("AimVisibleOnly", { Text="Visible Only", Description="Raycast check before aiming", Default=CFG.Combat.AimVisibleOnly, Callback=bind(CFG.Combat, "AimVisibleOnly") })
 Aim:AddToggle("AimTeamCheck",   { Text="Team Check",   Default=CFG.Combat.AimTeamCheck,   Callback=bind(CFG.Combat, "AimTeamCheck") })
 Aim:AddToggle("AimWallCheck",   { Text="Wall Check",   Default=CFG.Combat.AimWallCheck,   Callback=bind(CFG.Combat, "AimWallCheck") })
 Aim:AddToggle("AimAutoFire",    { Text="Auto Fire",    Default=CFG.Combat.AimAutoFire,    Callback=bind(CFG.Combat, "AimAutoFire") })
 Aim:AddSlider("AutoFireDelay", { Text="Auto Fire Delay (s × 100)", Min=5, Max=100,
-    Default=math.floor((CFG.Combat.AutoFireDelay or 0.15) * 100), Rounding=0,
-    Callback=function(v) CFG.Combat.AutoFireDelay = v / 100; NullExploits.SaveCfg() end })
+    Default=math.floor((CFG.Combat.AutoFireDelay or 0.15)*100), Rounding=0,
+    Callback=function(v) CFG.Combat.AutoFireDelay=v/100; NullExploits.SaveCfg() end })
 
 local Trig = Tabs.Combat:AddLeftGroupbox("Triggerbot / Silent")
 Trig:AddToggle("Triggerbot", { Text="Triggerbot", Description="Auto-fire when crosshair is on an enemy",
@@ -700,38 +701,32 @@ Trig:AddToggle("SilentAim", { Text="Silent Aim", Default=CFG.Combat.SilentAim, C
 
 local Move = Tabs.Combat:AddLeftGroupbox("Movement")
 Move:AddToggle("Fly", { Text="Fly", Default=CFG.Combat.Fly, Callback=bind(CFG.Combat, "Fly") })
-Move:AddSlider("FlySpeed", { Text="Fly Speed", Min=10, Max=300,
-    Default=CFG.Combat.FlySpeed or 50, Rounding=0, Callback=bind(CFG.Combat, "FlySpeed") })
+Move:AddSlider("FlySpeed", { Text="Fly Speed", Min=10, Max=300, Default=CFG.Combat.FlySpeed or 50, Rounding=0, Callback=bind(CFG.Combat, "FlySpeed") })
 Move:AddToggle("Noclip", { Text="Noclip", Default=CFG.Combat.Noclip, Callback=bind(CFG.Combat, "Noclip") })
 Move:AddToggle("DashNoCooldown", { Text="Dash No Cooldown", Default=CFG.Combat.DashNoCooldown, Callback=bind(CFG.Combat, "DashNoCooldown") })
 
 local Abil = Tabs.Combat:AddLeftGroupbox("Infinite Abilities")
-local abilList = {
-    {"InfEnergy","Inf Energy"},
-    {"InfSoru","Inf Soru"},
-    {"InfObservation","Inf Observation Range"},
-    {"InfMink","Inf Mink V3"},
+for _, t in ipairs({
+    {"InfEnergy","Inf Energy"}, {"InfSoru","Inf Soru"},
+    {"InfObservation","Inf Observation Range"}, {"InfMink","Inf Mink V3"},
     {"HighlightSelf","Highlight Self"},
-}
-for _, t in ipairs(abilList) do
+}) do
     Abil:AddToggle(t[1], { Text=t[2], Default=CFG.Combat[t[1]], Callback=bind(CFG.Combat, t[1]) })
 end
-
-local CombatSafety = Tabs.Combat:AddLeftGroupbox("Safety")
-CombatSafety:AddToggle("SafeMode", { Text="Safe Mode", Default=CFG.Combat.SafeMode, Callback=bind(CFG.Combat, "SafeMode") })
+local Safety = Tabs.Combat:AddLeftGroupbox("Safety")
+Safety:AddToggle("SafeMode", { Text="Safe Mode", Default=CFG.Combat.SafeMode, Callback=bind(CFG.Combat, "SafeMode") })
 
 -- =========================================================
--- ESP TAB
+-- ESP
 -- =========================================================
 local ESPMain = Tabs.ESP:AddLeftGroupbox("ESP Pools")
-local espOrder = {
+for _, e in ipairs({
     {key="Players", title="Players"}, {key="Islands", title="Islands"},
     {key="Fruits", title="Fruits"}, {key="Chests", title="Chests"},
     {key="Berries", title="Berries"}, {key="Dealers", title="Dealers"},
     {key="Mobs", title="Mobs"}, {key="Items", title="Items"},
     {key="Pumpkins", title="Pumpkins"},
-}
-for _, e in ipairs(espOrder) do
+}) do
     ESPMain:AddToggle(e.key, { Text=e.title, Default=CFG.ESP[e.key],
         Callback=function(v)
             CFG.ESP[e.key] = v
@@ -739,26 +734,22 @@ for _, e in ipairs(espOrder) do
             NullExploits.SaveCfg()
         end })
 end
-
 local ESPColors = Tabs.ESP:AddLeftGroupbox("Colors")
-local espColors = {
+for _, e in ipairs({
     {key="ColorPlayers", title="Players"}, {key="ColorIslands", title="Islands"},
-    {key="ColorFruits", title="Fruits"},   {key="ColorChests", title="Chests"},
+    {key="ColorFruits", title="Fruits"}, {key="ColorChests", title="Chests"},
     {key="ColorBerries", title="Berries"}, {key="ColorDealers", title="Dealers"},
-    {key="ColorMobs", title="Mobs"},       {key="ColorItems", title="Items"},
+    {key="ColorMobs", title="Mobs"}, {key="ColorItems", title="Items"},
     {key="ColorPumpkins", title="Pumpkins"},
-}
-for _, e in ipairs(espColors) do
+}) do
     ESPColors:AddButton({ Text=e.title, Func=function() end })
-    -- Colorpicker is handled below to match leak's front-end limitations
 end
-
 local ESPRange = Tabs.ESP:AddLeftGroupbox("Range")
 ESPRange:AddSlider("MaxDistance", { Text="Max Render Distance", Min=500, Max=10000,
     Default=CFG.ESP.MaxDistance or 3000, Rounding=0, Callback=bind(CFG.ESP, "MaxDistance") })
 
 -- =========================================================
--- TELEPORT TAB
+-- TELEPORT
 -- =========================================================
 local Worlds = Tabs.Teleport:AddLeftGroupbox("World")
 Worlds:AddButton({ Text="Main (Sea 1)", Func=function() TP.World("Sea1") end })
@@ -767,10 +758,8 @@ Worlds:AddButton({ Text="Zou (Sea 3)", Func=function() TP.World("Sea3") end })
 
 local Islands = Tabs.Teleport:AddLeftGroupbox("Islands")
 Islands:AddDropdown("Island", { Text="Island",
-    Values = (TP.IslandNames and TP.IslandNames()) or {},
-    Default = 1,
-    Callback = function(n) CFG.Teleport.TPIsland = n; NullExploits.SaveCfg() end,
-})
+    Values=(TP.IslandNames and TP.IslandNames()) or {}, Default=1,
+    Callback=function(n) CFG.Teleport.TPIsland=n; NullExploits.SaveCfg() end })
 Islands:AddButton({ Text="TP Now", Func=function()
     if CFG.Teleport.TPIsland and CFG.Teleport.TPIsland ~= "" then TP.Island(CFG.Teleport.TPIsland) end
 end })
@@ -780,9 +769,8 @@ end })
 
 local Portals = Tabs.Teleport:AddLeftGroupbox("Portals")
 Portals:AddDropdown("Portal", { Text="Portal",
-    Values = (TP.PortalNames and TP.PortalNames()) or {},
-    Default = 1, Callback = function(n) CFG.Teleport._PortalSelected = n end,
-})
+    Values=(TP.PortalNames and TP.PortalNames()) or {}, Default=1,
+    Callback=function(n) CFG.Teleport._PortalSelected=n end })
 Portals:AddButton({ Text="Enter Portal", Func=function()
     local n = CFG.Teleport._PortalSelected
     if n and n ~= "" then TP.Portal(n) end
@@ -796,23 +784,18 @@ TPPlayers:AddDropdown("Player", { Text="Player",
             if p ~= LP then table.insert(out, p.Name) end
         end
         table.sort(out); return out
-    end)(),
-    Default = 1, Callback = bind(CFG.Teleport, "TPPlayer"),
-})
+    end)(), Default=1, Callback=bind(CFG.Teleport, "TPPlayer") })
 TPPlayers:AddDropdown("NPC", { Text="NPC",
-    Values = (TP.NPCNames and TP.NPCNames()) or {},
-    Default = 1, Callback = bind(CFG.Teleport, "TPNPC"),
-})
+    Values=(TP.NPCNames and TP.NPCNames()) or {}, Default=1,
+    Callback=bind(CFG.Teleport, "TPNPC") })
 TPPlayers:AddButton({ Text="TP to Fruit", Func=function() TP.NearestFruit() end })
 
 local TPCoords = Tabs.Teleport:AddLeftGroupbox("Custom Coords")
-local cx, cy, cz
-cx = TPCoords:AddInput("X", { Text="X", Default="0", Callback=function(v) cx = tonumber(v) or 0 end })
-cy = TPCoords:AddInput("Y", { Text="Y", Default="0", Callback=function(v) cy = tonumber(v) or 0 end })
-cz = TPCoords:AddInput("Z", { Text="Z", Default="0", Callback=function(v) cz = tonumber(v) or 0 end })
-TPCoords:AddButton({ Text="TP to Coords", Func=function()
-    TP.Coords(cx or 0, cy or 0, cz or 0)
-end })
+local cx, cy, cz = 0, 0, 0
+TPCoords:AddInput("X", { Text="X", Default="0", Callback=function(v) cx=tonumber(v) or 0 end })
+TPCoords:AddInput("Y", { Text="Y", Default="0", Callback=function(v) cy=tonumber(v) or 0 end })
+TPCoords:AddInput("Z", { Text="Z", Default="0", Callback=function(v) cz=tonumber(v) or 0 end })
+TPCoords:AddButton({ Text="TP to Coords", Func=function() TP.Coords(cx, cy, cz) end })
 
 local TPStep = Tabs.Teleport:AddLeftGroupbox("Manual Step")
 TPStep:AddButton({ Text="↑ Forward",  Func=function() TP.Step("forward", 25) end })
@@ -823,7 +806,7 @@ TPStep:AddButton({ Text="↑ Up",       Func=function() TP.Step("up", 25) end })
 TPStep:AddButton({ Text="↓ Down",     Func=function() TP.Step("down", 25) end })
 
 -- =========================================================
--- MISC TAB
+-- MISC
 -- =========================================================
 local Perf = Tabs.Misc:AddLeftGroupbox("Performance")
 Perf:AddToggle("FPSBoost", { Text="FPS Boost", Default=CFG.Misc.FPSBoost,
@@ -831,7 +814,7 @@ Perf:AddToggle("FPSBoost", { Text="FPS Boost", Default=CFG.Misc.FPSBoost,
         CFG.Misc.FPSBoost = v
         if v then
             task.spawn(function()
-                while CFG.Misc.FPSBoost do
+                while CFG.Misc.FPSBoost and alive() do
                     pcall(function() Misc.UnlockFPS() end); task.wait(1)
                 end
             end)
@@ -839,7 +822,7 @@ Perf:AddToggle("FPSBoost", { Text="FPS Boost", Default=CFG.Misc.FPSBoost,
         NullExploits.SaveCfg()
     end })
 Perf:AddToggle("LowGFX", { Text="Low Graphics", Default=CFG.Misc.LowGFX,
-    Callback=function(v) CFG.Misc.LowGFX = v; if v then Misc.LowGraphics() end; NullExploits.SaveCfg() end })
+    Callback=function(v) CFG.Misc.LowGFX=v; if v then Misc.LowGraphics() end; NullExploits.SaveCfg() end })
 Perf:AddToggle("FullBright", { Text="Full Bright", Default=CFG.Misc.FullBright,
     Callback=bindFn(CFG.Misc, "FullBright", function(v) Misc.SetFullBright(v) end) })
 Perf:AddToggle("NoFog", { Text="No Fog", Default=CFG.Misc.NoFog,
@@ -881,8 +864,9 @@ GodMode:AddDropdown("TimeSelect", { Text="Select Time", Values={"Day","Night"},
 GodMode:AddToggle("NoClip", { Text="Noclip", Default=CFG.Misc.NoClip, Callback=bind(CFG.Misc, "NoClip") })
 
 task.spawn(function()
-    while true do
+    while alive() do
         task.wait(0.5)
+        if not alive() then break end
         if CFG.Misc.WalkWater then pcall(function() Misc.WalkWater(true) end) end
         if CFG.Misc.TimeEnabled then pcall(function() Misc.TimeOfDay(CFG.Misc.TimeSelect) end) end
     end
@@ -892,31 +876,25 @@ local Redeem = Tabs.Misc:AddLeftGroupbox("Redeem")
 Redeem:AddButton({ Text="Redeem All Codes", Func=function() Misc.RedeemCodes() end })
 
 -- =========================================================
--- RAID TAB
+-- RAID
 -- =========================================================
-local dungeonChips = {
-    "Flame","Ice","Quake","Light","Dark","String","Rumble","Magma",
-    "Human: Buddha","Sand","Bird: Phoenix","Dough",
-}
 local Chip = Tabs.Raid:AddLeftGroupbox("Chip")
-Chip:AddDropdown("SelectChip", { Text="Dungeon Chip", Values=dungeonChips,
+Chip:AddDropdown("SelectChip", { Text="Dungeon Chip",
+    Values={ "Flame","Ice","Quake","Light","Dark","String","Rumble","Magma",
+             "Human: Buddha","Sand","Bird: Phoenix","Dough" },
     Default=CFG.Raid.SelectChip or "Flame", Callback=bind(CFG.Raid, "SelectChip") })
 Chip:AddToggle("AutoSelectChip", { Text="Auto Select Chip", Default=CFG.Raid.AutoSelectChip, Callback=bind(CFG.Raid, "AutoSelectChip") })
-Chip:AddButton({ Text="Buy Chip [Beli]",         Func=function() end })
-Chip:AddButton({ Text="Buy Chip [Devil Fruit]",  Func=function() end })
+Chip:AddButton({ Text="Buy Chip [Beli]", Func=function() end })
+Chip:AddButton({ Text="Buy Chip [Devil Fruit]", Func=function() end })
 
 local RaidAuto = Tabs.Raid:AddLeftGroupbox("Auto Raid")
-local raidList = {
-    {"AutoStartRaid","Auto Start Raid"},
-    {"AutoRaidNextIsland","Auto Raid + Next Island"},
-    {"KillAuraRaid","Kill Aura (Raid)"},
-    {"AutoAwakening","Auto Awakening"},
+for _, t in ipairs({
+    {"AutoStartRaid","Auto Start Raid"}, {"AutoRaidNextIsland","Auto Raid + Next Island"},
+    {"KillAuraRaid","Kill Aura (Raid)"}, {"AutoAwakening","Auto Awakening"},
     {"AutoTeleportLab","Auto Teleport Lab"},
-}
-for _, t in ipairs(raidList) do
+}) do
     RaidAuto:AddToggle(t[1], { Text=t[2], Default=CFG.Raid[t[1]], Callback=bind(CFG.Raid, t[1]) })
 end
-
 local Law = Tabs.Raid:AddLeftGroupbox("Law Raid")
 Law:AddToggle("AutoLawMicrochip", { Text="Auto Buy Microchip Law", Default=CFG.Raid.AutoLawMicrochip, Callback=bind(CFG.Raid, "AutoLawMicrochip") })
 Law:AddToggle("AutoLawStart", { Text="Auto Start Law Raid", Default=CFG.Raid.AutoLawStart, Callback=bind(CFG.Raid, "AutoLawStart") })
@@ -924,11 +902,11 @@ Law:AddToggle("AutoLawKill", { Text="Auto Kill Law", Default=CFG.Raid.AutoLawKil
 Law:AddButton({ Text="Buy Law Microchip", Func=function() end })
 
 -- =========================================================
--- SHOP TAB
+-- SHOP
 -- =========================================================
 local function shopBtn(grp, label, cmd, ...)
     local args = table.pack(...)
-    grp:AddButton({ Text = label, Func = function()
+    grp:AddButton({ Text=label, Func=function()
         pcall(function()
             if S.CommF_ and S.CommF_.InvokeServer then
                 S.CommF_:InvokeServer(cmd, table.unpack(args, 1, args.n))
@@ -936,7 +914,6 @@ local function shopBtn(grp, label, cmd, ...)
         end)
     end })
 end
-
 local Haki = Tabs.Shop:AddLeftGroupbox("Haki")
 shopBtn(Haki, "Buy Buso", "BuyHaki", "Buso")
 shopBtn(Haki, "Buy Geppo", "BuyHaki", "Geppo")
@@ -944,20 +921,15 @@ shopBtn(Haki, "Buy Soru", "BuyHaki", "Soru")
 shopBtn(Haki, "Buy Ken (Observation)", "KenTalk", "Buy")
 
 local Styles = Tabs.Shop:AddLeftGroupbox("Fighting Styles")
-local styleList = {
-    {"Buy Black Leg","BuyBlackLeg"},
-    {"Buy Electro","BuyElectro"},
+for _, s in ipairs({
+    {"Buy Black Leg","BuyBlackLeg"}, {"Buy Electro","BuyElectro"},
     {"Buy Fishman Karate","BuyFishmanKarate"},
     {"Buy Dragon Claw","BlackbeardReward","DragonClaw","2"},
-    {"Buy Superhuman","BuySuperhuman"},
-    {"Buy Death Step","BuyDeathStep"},
+    {"Buy Superhuman","BuySuperhuman"}, {"Buy Death Step","BuyDeathStep"},
     {"Buy Sharkman Karate","BuySharkmanKarate"},
-    {"Buy Electric Claw","BuyElectricClaw"},
-    {"Buy Dragon Talon","BuyDragonTalon"},
-    {"Buy Godhuman","BuyGodhuman"},
-    {"Buy Sanguine Art","BuySanguineArt"},
-}
-for _, s in ipairs(styleList) do
+    {"Buy Electric Claw","BuyElectricClaw"}, {"Buy Dragon Talon","BuyDragonTalon"},
+    {"Buy Godhuman","BuyGodhuman"}, {"Buy Sanguine Art","BuySanguineArt"},
+}) do
     shopBtn(Styles, s[1], s[2], table.unpack(s, 3))
 end
 
@@ -979,12 +951,12 @@ shopBtn(Access, "Buy Bizarre Rifle", "Ectoplasm", "Buy", 1)
 shopBtn(Access, "Buy Ghoul Mask", "Ectoplasm", "Buy", 2)
 
 local Frag = Tabs.Shop:AddLeftGroupbox("Fragments")
-Frag:AddButton({ Text="Refund Stats",     Func=function() end })
-Frag:AddButton({ Text="Reroll Race",      Func=function() end })
-Frag:AddButton({ Text="Buy Cyborg Race",  Func=function() end })
+Frag:AddButton({ Text="Refund Stats", Func=function() end })
+Frag:AddButton({ Text="Reroll Race", Func=function() end })
+Frag:AddButton({ Text="Buy Cyborg Race", Func=function() end })
 
 -- =========================================================
--- SETTINGS TAB (themes live here)
+-- SETTINGS (themes + size, no scale slider)
 -- =========================================================
 local ThemeSec = Tabs.Settings:AddLeftGroupbox("Theme")
 local themeNames = Themes.Names()
@@ -993,19 +965,14 @@ local themeIdx = 1
 for i, n in ipairs(themeNames) do if n == currentTheme then themeIdx = i; break end end
 
 ThemeSec:AddDropdown("ThemePreset", {
-    Text = "Theme Preset",
-    Values = themeNames,
-    Default = themeIdx,
-    Callback = function(name)
+    Text="Theme Preset", Values=themeNames, Default=themeIdx,
+    Callback=function(name)
         CFG.Theme.Current = name
         pcall(Themes.Apply, name)
         NullExploits.SaveCfg()
     end,
 })
-ThemeSec:AddButton({ Text = "Reload Active Theme", Func = function()
-    pcall(Themes.Apply, CFG.Theme.Current or "Banana")
-end })
-ThemeSec:AddButton({ Text = "Next Theme", Func = function()
+ThemeSec:AddButton({ Text="Next Theme", Func=function()
     local names = Themes.Names()
     local idx = 1
     for i, n in ipairs(names) do if n == CFG.Theme.Current then idx = i; break end end
@@ -1016,53 +983,54 @@ ThemeSec:AddButton({ Text = "Next Theme", Func = function()
 end })
 
 local UISec = Tabs.Settings:AddLeftGroupbox("UI")
-UISec:AddSlider("UIScale", { Text="UI Scale (×100)", Min=50, Max=150,
-    Default=math.floor((CFG.UI.Scale or 1.0) * 100), Rounding=0,
-    Callback=function(v)
-        CFG.UI.Scale = v / 100
+local sizeChoices = { "Small", "Default", "Large", "XL" }
+local sizeIdx = 2
+for i, s in ipairs(sizeChoices) do if s == (CFG.UI.Size or "Default") then sizeIdx = i; break end end
+UISec:AddDropdown("UISize", {
+    Text="Window Size", Values=sizeChoices, Default=sizeIdx,
+    Callback=function(name)
+        CFG.UI.Size = name
+        local scale = ({ Small=0.8, Default=1.0, Large=1.2, XL=1.5 })[name] or 1.0
         local w = root:Raw()
-        if w and w.SetUIScale then pcall(function() w:SetUIScale(CFG.UI.Scale) end) end
+        if w and w.SetUIScale then pcall(function() w:SetUIScale(scale) end) end
         NullExploits.SaveCfg()
-    end })
+    end,
+})
 
 local CfgSec = Tabs.Settings:AddLeftGroupbox("Config")
-CfgSec:AddButton({ Text = "Save Config",   Func = function() NullExploits.SaveCfg() end })
-CfgSec:AddButton({ Text = "Reload Config", Func = function()
+CfgSec:AddButton({ Text="Save Config",   Func=function() NullExploits.SaveCfg() end })
+CfgSec:AddButton({ Text="Reload Config", Func=function()
     NullExploits.LoadCfg()
     local w = root:Raw()
-    if w and w.SetUIScale and CFG.UI.Scale then
-        pcall(function() w:SetUIScale(CFG.UI.Scale) end)
-    end
+    local scale = ({ Small=0.8, Default=1.0, Large=1.2, XL=1.5 })[CFG.UI.Size or "Default"] or 1.0
+    if w and w.SetUIScale then pcall(function() w:SetUIScale(scale) end) end
 end })
 
 local DangerSec = Tabs.Settings:AddLeftGroupbox("Danger Zone")
-DangerSec:AddButton({ Text = "Destroy UI", Func = function()
-    local w = root:Raw()
-    if w and w.Destroy then pcall(function() w:Destroy() end) end
+DangerSec:AddButton({ Text="Destroy UI", Func=function()
+    if NullExploits.UI.Kill then pcall(NullExploits.UI.Kill) end
 end })
 
 -- =========================================================
--- ABOUT TAB
+-- ABOUT
 -- =========================================================
 local AboutSec = Tabs.About:AddLeftGroupbox("NullExploits")
 AboutSec:AddLabel("NullExploits — Blox Fruits automation hub.")
-AboutSec:AddLabel("WindUI front-end. 17 themes. Persistent config.")
+AboutSec:AddLabel("WindUI front-end. 20 themes incl. Blue/Red/Purple gradient.")
 AboutSec:AddLabel("Kaitun core. UI-only build.")
 AboutSec:AddButton({ Text="Open Settings", Func=function()
     local w = root:Raw()
     if w and w.SelectTab then pcall(function() w:SelectTab(Tabs.Settings) end) end
 end })
-AboutSec:AddButton({ Text="Destroy UI", Func=function()
-    local w = root:Raw()
-    if w and w.Destroy then pcall(function() w:Destroy() end) end
+AboutSec:AddButton({ Text="Kill UI & Script", Func=function()
+    if NullExploits.UI.Kill then pcall(NullExploits.UI.Kill) end
 end })
 
 -- =========================================================
 -- EXPOSE
 -- =========================================================
-NullExploits.UI = NullExploits.UI or {}
-NullExploits.UI.Root        = root
-NullExploits.UI.Window      = root:Raw()
+NullExploits.UI.Root = root
+NullExploits.UI.Window = root:Raw()
 NullExploits.UI.SettingsTab = Tabs.Settings
 NullExploits.UI.Tabs = {
     Info=Tabs.Info, Farm=Tabs.Farm, Combat=Tabs.Combat, ESP=Tabs.ESP,
@@ -1072,6 +1040,14 @@ NullExploits.UI.Tabs = {
 NullExploits.UI.Themes = Themes
 
 pcall(function() NullExploits.LoadCfg() end)
-lib:Notify({ Title="NullExploits", Description="loaded — 10 tabs, 17 themes", Duration=5 })
+pcall(function()
+    task.spawn(function()
+        task.wait(0.5)
+        if alive() then
+            pcall(function() Themes.Apply(CFG.Theme.Current or "Banana") end)
+        end
+    end)
+end)
+lib:Notify({ Title="NullExploits", Description="loaded — 10 tabs, gradient themes", Duration=5 })
 
 return true
