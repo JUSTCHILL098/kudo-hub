@@ -1,5 +1,5 @@
 -- language: Lua, file: src/07-ui.lua
--- NullExploits :: UI (Full Leaked Layout / Black-Red Gradient)
+-- NullExploits :: UI (Premium Dark Card-Based / Gradient Background)
 
 NullExploits = NullExploits or {}
 local CFG = NullExploits.CFG or {}
@@ -10,6 +10,7 @@ local RunService       = game:GetService("RunService")
 local TeleportService  = game:GetService("TeleportService")
 local HttpService      = game:GetService("HttpService")
 local Lighting         = game:GetService("Lighting")
+local TweenService     = game:GetService("TweenService")
 local LP = Players.LocalPlayer
 
 local S = { Players = Players, RunSvc = RunService, TPS = TeleportService }
@@ -123,21 +124,29 @@ do
     WindUI = res
 end
 
-local RED_C1 = Color3.fromHex("#902E31")
-local RED_C2 = Color3.fromHex("#E62929")
-local BG_DARK = Color3.fromHex("#110808")
+-- =========================================================
+-- PREMIUM DARK CARD THEME (Exact Hex Codes)
+-- =========================================================
+local COL_ACCENT = Color3.fromHex("#D97878")
+local COL_ACCENT2 = Color3.fromHex("#A94F4F")
+local COL_BG = Color3.fromHex("#100808")
+local COL_CARD = Color3.fromHex("#321B1B")
+local COL_HOVER = Color3.fromHex("#402020")
+local COL_TEXT = Color3.fromHex("#F2EAEA")
+local COL_MUTED = Color3.fromHex("#A88F8F")
+local COL_BORDER = Color3.fromHex("#4A2C2C")
 
 pcall(function()
     WindUI:AddTheme({
-        Name = "MetallicRed",
-        Accent      = RED_C2,
-        Dialog      = BG_DARK,
-        Outline     = RED_C1,
-        Text        = Color3.fromHex("#FEE2E2"),
-        Placeholder = Color3.fromHex("#9C7A7A"),
-        Background  = BG_DARK,
-        Button      = RED_C1,
-        Icon        = RED_C2,
+        Name = "PremiumBurgundy",
+        Accent      = COL_ACCENT,
+        Dialog      = COL_CARD, -- Card Background
+        Outline     = COL_BORDER,
+        Text        = COL_TEXT,
+        Placeholder = COL_MUTED,
+        Background  = COL_BG, -- Secondary Background
+        Button      = COL_HOVER,
+        Icon        = COL_ACCENT,
     })
 end)
 
@@ -152,11 +161,11 @@ local function safe(cb, ...)
     end
 end
 
+-- Lucide Icons
 local tabIcons = {
     ["Info"]="lucide:info", ["Combat"]="lucide:crosshair", ["ESP"]="lucide:eye",
     ["Teleport"]="lucide:map-pin", ["Misc"]="lucide:settings", ["Raid"]="lucide:shield",
     ["Shop"]="lucide:shopping-cart", ["Settings"]="lucide:sliders", ["About"]="lucide:user",
-    ["Local Player"]="lucide:user", ["Fruit And Raid"]="lucide:apple",
 }
 
 local function pick(a, b)
@@ -164,10 +173,38 @@ local function pick(a, b)
     return nil, (a or {})
 end
 
+-- =========================================================
+-- CARD SECTION WRAPPER
+-- =========================================================
 local function makeGroup(tab, name)
+    -- Force this section to look like a rounded card
     local container = tab
-    local okS, sec = pcall(function() return tab:Section({ Title = name, Opened = false }) end)
-    if okS and type(sec) == "table" and type(sec.Toggle) == "function" then container = sec end
+    local okS, sec = pcall(function() 
+        return tab:Section({ 
+            Title = name, 
+            Opened = true,
+            Box = true, -- Enforce card background
+        }) 
+    end)
+    
+    if okS and type(sec) == "table" and type(sec.Toggle) == "function" then 
+        container = sec 
+        -- Apply rounded corners to the section card if possible
+        pcall(function()
+            if sec.Instance and sec.Instance:IsA("Frame") then
+                local corner = Instance.new("UICorner")
+                corner.CornerRadius = UDim.new(0, 14)
+                corner.Parent = sec.Instance
+                
+                local stroke = Instance.new("UIStroke")
+                stroke.Color = COL_BORDER
+                stroke.Transparency = 0.8
+                stroke.Thickness = 1
+                stroke.Parent = sec.Instance
+            end
+        end)
+    end
+    
     local group = {}
 
     function group:AddToggle(a, b)
@@ -230,13 +267,17 @@ local function makeGroup(tab, name)
     return group
 end
 
+-- =========================================================
+-- MAIN WINDOW CREATION & BACKGROUND GRADIENT
+-- =========================================================
 function lib:CreateWindow(cfg)
     local window = WindUI:CreateWindow({
         Title = HUB_NAME,
+        Subtitle = "Kudo 〢 Blox Fruits", -- Placed in the metadata line
         Icon = OPEN_IMAGE,
         Folder = "NullExploits",
         Size = UDim2.fromOffset(620, 460),
-        Theme = "MetallicRed",
+        Theme = "PremiumBurgundy",
         Transparent = true, 
         Resizable = true,
         SideBarWidth = 190,
@@ -244,8 +285,39 @@ function lib:CreateWindow(cfg)
         ScrollBarEnabled = true,
     })
 
+    -- Apply the Gradient Background to the main window frame
     pcall(function()
-        window:Tag({ Title = "Kudo 〢 Blox Fruits", Color = RED_C1, Border = true })
+        local mainGui = window.Gui or window.Instance or window.Frame
+        if mainGui and mainGui:FindFirstChild("Main") then
+            mainGui = mainGui.Main
+        end
+        if mainGui and mainGui:IsA("Frame") then
+            local bg = mainGui:FindFirstChild("Background") or mainGui
+            if bg and bg:IsA("Frame") then
+                local gradient = Instance.new("UIGradient")
+                -- Transition from Pure Black -> Extremely Dark Burgundy -> Deep Wine Red
+                gradient.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0.0, Color3.fromHex("#050505")),
+                    ColorSequenceKeypoint.new(0.5, Color3.fromHex("#160707")),
+                    ColorSequenceKeypoint.new(1.0, Color3.fromHex("#250D0D"))
+                })
+                gradient.Rotation = 90 -- Top to bottom
+                gradient.Parent = bg
+            end
+        end
+    end)
+
+    -- Update Fonts globally where possible
+    pcall(function()
+        local gui = window.Gui or window.Instance
+        if gui then
+            for _, v in ipairs(gui:GetDescendants()) do
+                if v:IsA("TextLabel") or v:IsA("TextButton") then
+                    v.Font = Enum.Font.Gotham
+                    v.TextColor3 = COL_TEXT
+                end
+            end
+        end
     end)
 
     pcall(function()
@@ -254,7 +326,7 @@ function lib:CreateWindow(cfg)
             Icon = OPEN_IMAGE,
             CornerRadius = UDim.new(0, 16),
             StrokeThickness = 2,
-            Color = ColorSequence.new(RED_C1, RED_C2),
+            Color = ColorSequence.new(COL_ACCENT2, COL_ACCENT),
             OnlyMobile = false,
             Enabled = CFG.UI.OpenButton ~= false,
             Draggable = true,
@@ -300,7 +372,7 @@ local function bind(tbl, key) return function(v) tbl[key]=v; NullExploits.SaveCf
 local function bindFn(tbl, key, fn) return function(v) tbl[key]=v; pcall(fn, v); NullExploits.SaveCfg() end end
 
 -- =========================================================
--- INFO TAB (Boxed Status)
+-- INFO TAB (Boxed Cards)
 -- =========================================================
 local infoSec = Tabs.Info:AddLeftGroupbox("Status")
 local lblJob   = infoSec:AddLabel("JobId: …")
@@ -341,7 +413,7 @@ task.spawn(function()
 end)
 
 -- =========================================================
--- COMBAT TAB (Full)
+-- COMBAT TAB
 -- =========================================================
 local Aim = Tabs.Combat:AddLeftGroupbox("Aimbot")
 Aim:AddToggle("Aimbot", { Text="Aimbot", Default=CFG.Combat.Aimbot, Callback=bind(CFG.Combat, "Aimbot") })
@@ -353,7 +425,6 @@ Aim:AddToggle("AimVisibleOnly", { Text="Visible Only", Default=CFG.Combat.AimVis
 Aim:AddToggle("AimTeamCheck", { Text="Team Check", Default=CFG.Combat.AimTeamCheck, Callback=bind(CFG.Combat, "AimTeamCheck") })
 Aim:AddToggle("AimWallCheck", { Text="Wall Check", Default=CFG.Combat.AimWallCheck, Callback=bind(CFG.Combat, "AimWallCheck") })
 Aim:AddToggle("AimAutoFire", { Text="Auto Fire", Default=CFG.Combat.AimAutoFire, Callback=bind(CFG.Combat, "AimAutoFire") })
-Aim:AddSlider("AutoFireDelay", { Text="Auto Fire Delay", Min=5, Max=100, Default=CFG.Combat.AutoFireDelay*100, Callback=function(v) CFG.Combat.AutoFireDelay=v/100; NullExploits.SaveCfg() end })
 
 local Trig = Tabs.Combat:AddLeftGroupbox("Triggerbot / Silent")
 Trig:AddToggle("Triggerbot", { Text="Triggerbot", Default=CFG.Combat.Triggerbot, Callback=bind(CFG.Combat, "Triggerbot") })
@@ -535,7 +606,7 @@ DangerSec:AddButton({ Text="Destroy UI", Func=function() if root:Raw().Destroy t
 -- ABOUT TAB
 -- =========================================================
 local AboutSec = Tabs.About:AddLeftGroupbox("NullExploits")
-AboutSec:AddLabel("NullExploits — Black & Red Edition")
+AboutSec:AddLabel("NullExploits — Premium Dark Edition")
 AboutSec:AddLabel("Managed by Kudo 〢 Blox Fruits")
 AboutSec:AddLabel("Kaitun core. UI build.")
 AboutSec:AddButton({ Text="Open Settings", Func=function() local w = root:Raw(); if w and w.SelectTab then pcall(function() w:SelectTab(Tabs.Settings) end) end end })
@@ -549,6 +620,6 @@ NullExploits.UI.Window = root:Raw()
 NullExploits.UI.SettingsTab = Tabs.Settings
 NullExploits.UI.Tabs = Tabs
 
-lib:Notify({ Title="NullExploits", Description="loaded — full UI restored", Duration=5 })
+lib:Notify({ Title="NullExploits", Description="loaded — Premium UI", Duration=5 })
 
 return true
