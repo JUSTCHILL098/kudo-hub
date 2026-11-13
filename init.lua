@@ -172,17 +172,17 @@ pcall(function()
 end)
 
 -- =========================================================
--- SOFT MODULES
+-- SOFT MODULES (Farm and 08 removed)
 -- =========================================================
 local softOrder = {
     "src/02-themes.lua",
     "src/03-esp.lua",
-    "src/04a-farm-data.lua",
-    "src/04b-farm-core.lua",
+    -- "src/04a-farm-data.lua",   -- Removed (Farm is gone)
+    -- "src/04b-farm-core.lua",   -- Removed (Farm is gone)
     "src/05-teleport.lua",
     "src/06-misc.lua",
     "src/07-ui.lua",
-    "src/08-settings-about.lua",
+    -- "src/08-settings-about.lua" -- Removed (07-ui handles settings now)
 }
 
 local failed = {}
