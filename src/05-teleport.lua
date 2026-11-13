@@ -2,10 +2,10 @@
 -- NullExploits :: teleport
 -- Island scan, custom-coordinate TP, NPC TP, player TP, fruit TP,
 -- portal routes, manual step. Depends on 01-config.
--- FIX: TPIslandAuto now tweens CFrame, not BasePart.
+-- FIX: nil-safe loop guards so TPNPC/TPPlayer/TPIsland don't spam on boot.
 
 NullExploits = NullExploits or {}
-local CFG = NullExploits.CFG
+local CFG = NullExploits.CFG or {}
 local H   = NullExploits.Helpers
 local S   = NullExploits.Services
 local WS  = S.WS
@@ -16,6 +16,16 @@ local CommF_ = S.CommF_
 
 local TP = {}
 NullExploits.Teleport = TP
+
+-- =========================================================
+-- defensively init CFG keys (nil-safe on first boot)
+-- =========================================================
+CFG.Teleport               = CFG.Teleport or {}
+CFG.Teleport.TPNPC         = CFG.Teleport.TPNPC    or ""
+CFG.Teleport.TPPlayer      = CFG.Teleport.TPPlayer or ""
+CFG.Teleport.TPIsland      = CFG.Teleport.TPIsland or ""
+CFG.Teleport.IslandAnchors = CFG.Teleport.IslandAnchors or {}
+CFG.Teleport.PortalRoutes  = CFG.Teleport.PortalRoutes  or {}
 
 -- =========================================================
 -- island anchor scan
@@ -42,12 +52,10 @@ NullExploits.StartLoop("TPIslandScan", function()
     end
     local wo = WS:FindFirstChild("_WorldOrigin")
     local locs = wo and wo:FindFirstChild("Locations")
-    if locs and #locs:GetChildren() ~= (function()
+    if locs then
         local n = 0
         for _ in pairs(CFG.Teleport.IslandAnchors) do n = n + 1 end
-        return n
-    end)() then
-        scanIslands()
+        if #locs:GetChildren() ~= n then scanIslands() end
     end
 end, 10)
 
@@ -55,6 +63,7 @@ end, 10)
 -- core teleport
 -- =========================================================
 function TP.Island(name)
+    if not name or name == "" then return false end
     local anchor = CFG.Teleport.IslandAnchors[name]
     if not anchor or not anchor.Parent then
         H.Notify("TP", "unknown island: " .. tostring(name), 3)
@@ -74,6 +83,7 @@ function TP.Coords(x, y, z)
 end
 
 function TP.NPC(name)
+    if not name or name == "" then return false end
     local npcs = RS:FindFirstChild("NPCs")
     if not npcs then return false end
     local target = npcs:FindFirstChild(name)
@@ -88,6 +98,7 @@ function TP.NPC(name)
 end
 
 function TP.Player(name)
+    if not name or name == "" then return false end
     local target = Players:FindFirstChild(name)
     if not target or not target.Character then
         H.Notify("TP", "player not found: " .. tostring(name), 3)
@@ -144,6 +155,7 @@ CFG.Teleport.PortalRoutes = {
 }
 
 function TP.Portal(name)
+    if not name or name == "" then return false end
     local sea = H.GetSea()
     local routes = CFG.Teleport.PortalRoutes[sea]
     if not routes then return false end
@@ -174,21 +186,23 @@ function TP.Step(direction, distance)
 end
 
 -- =========================================================
--- loops — FIXED: tween CFrame, not BasePart
+-- loops — nil-safe guards
 -- =========================================================
 NullExploits.StartLoop("TPIslandAuto", function()
-    if CFG.Teleport.TPIsland == "" then return end
-    local anchor = CFG.Teleport.IslandAnchors[CFG.Teleport.TPIsland]
+    local name = CFG.Teleport.TPIsland
+    if not name or name == "" then return end
+    local anchor = CFG.Teleport.IslandAnchors[name]
     if not anchor or not anchor.Parent then return end
     if H.Dist(anchor.Position) < 15 then return end
     H.Tween(CFrame.new(anchor.Position + Vector3.new(0, 30, 0)), 400)
 end, 1)
 
 NullExploits.StartLoop("TPNPCAuto", function()
-    if CFG.Teleport.TPNPC == "" then return end
+    local name = CFG.Teleport.TPNPC
+    if not name or name == "" then return end
     local npcs = RS:FindFirstChild("NPCs")
     if not npcs then return end
-    local target = npcs:FindFirstChild(CFG.Teleport.TPNPC)
+    local target = npcs:FindFirstChild(name)
     if not target then return end
     local hr = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
     if hr and H.Dist(hr.Position) > 5 then
@@ -197,8 +211,9 @@ NullExploits.StartLoop("TPNPCAuto", function()
 end, 1)
 
 NullExploits.StartLoop("TPPlayerAuto", function()
-    if CFG.Teleport.TPPlayer == "" then return end
-    local target = Players:FindFirstChild(CFG.Teleport.TPPlayer)
+    local name = CFG.Teleport.TPPlayer
+    if not name or name == "" then return end
+    local target = Players:FindFirstChild(name)
     if not target or not target.Character then return end
     local hr = target.Character:FindFirstChild("HumanoidRootPart")
     if hr and H.Dist(hr.Position) > 5 then
