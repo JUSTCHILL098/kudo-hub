@@ -20,8 +20,9 @@ local LP = Players.LocalPlayer
 local S = { Players = Players, RunSvc = RunService, TPS = TeleportService }
 NullExploits.Services = S
 
--- UI lifecycle
-NullExploits.UI = NullExploits.UI or {}
+-- UI lifecycle — unified with the global Alive flag
+NullExploits.Alive    = true
+NullExploits.UI       = NullExploits.UI or {}
 NullExploits.UI.Alive = true
 NullExploits.UI.Connections = {}
 NullExploits.UI.Loops = {}
@@ -31,7 +32,7 @@ local function track(conn)
     return conn
 end
 local function alive()
-    return NullExploits.UI.Alive == true
+    return NullExploits.Alive ~= false and NullExploits.UI.Alive ~= false
 end
 
 -- =========================================================
@@ -201,16 +202,13 @@ local Misc = {
 NullExploits.Farm, NullExploits.ESP, NullExploits.Teleport, NullExploits.Misc = Farm, ESP, TP, Misc
 
 -- =========================================================
--- THEMES — now with gradients
+-- THEMES — with gradients
 -- =========================================================
 local Themes = {}
 local themePresets = {
-    -- gradient themes are the headline ones
     ["Blue Gradient"]   = { Accent="#3B82F6", Dialog="#0F172A", Outline="#1D4ED8", Text="#E2E8F0", Placeholder="#64748B", Background="#0A0F1F", Button="#1E293B", Icon="#3B82F6", Gradient={"#2563EB","#0EA5E9"} },
     ["Red Gradient"]    = { Accent="#EF4444", Dialog="#1A0F0F", Outline="#991B1B", Text="#FEE2E2", Placeholder="#9C7A7A", Background="#120808", Button="#3F1515", Icon="#EF4444", Gradient={"#DC2626","#F97316"} },
     ["Purple Gradient"] = { Accent="#A855F7", Dialog="#180F22", Outline="#6B21A8", Text="#EDE9FE", Placeholder="#8B7BA0", Background="#0F0816", Button="#3B0764", Icon="#A855F7", Gradient={"#8B5CF6","#EC4899"} },
-
-    -- legacy presets kept, each with a sensible gradient
     ["Banana"]        = { Accent="#FFC81E", Dialog="#16140C", Outline="#FFC81E", Text="#FFF8E1", Placeholder="#9C8F63", Background="#0E0C07", Button="#2A2410", Icon="#FFC81E", Gradient={"#FFC81E","#FF7A00"} },
     ["Custom Gray"]   = { Accent="#6E78C8", Dialog="#1B1B1F", Outline="#3A3D4D", Text="#E8E9F0", Placeholder="#83889E", Background="#15161A", Button="#262836", Icon="#6E78C8", Gradient={"#6E78C8","#43476E"} },
     ["Dark"]          = { Accent="#6E78C8", Dialog="#171717", Outline="#2E2E2E", Text="#ECECEC", Placeholder="#7A7A7A", Background="#111111", Button="#222222", Icon="#6E78C8", Gradient={"#6E78C8","#2B2D42"} },
@@ -261,12 +259,10 @@ end
 local activeWindow
 function Themes.SetWindow(w) activeWindow = w end
 
--- The actual re-skin. Three layers, each wrapped so one failure doesn't
--- stop the others. This is what makes switching visibly work.
 function Themes.Apply(name)
     local p = themePresets[name] or themePresets["Banana"]
 
-    -- 1) push every Config key individually (works on most WindUI builds)
+    -- 1) push every Config key individually
     pcall(function()
         if activeWindow and activeWindow.Configs then
             local c = activeWindow.Configs
@@ -281,12 +277,12 @@ function Themes.Apply(name)
         end
     end)
 
-    -- 2) native theme switch (best case: whole palette re-skins)
+    -- 2) native theme switch
     pcall(function()
         if activeWindow and activeWindow.SetTheme then activeWindow:SetTheme(name) end
     end)
 
-    -- 3) OpenButton gradient — the thing you actually look at
+    -- 3) OpenButton gradient
     pcall(function()
         if activeWindow and activeWindow.OpenButton and p.Gradient then
             activeWindow.OpenButton.Color = ColorSequence.new(
@@ -477,7 +473,6 @@ function lib:CreateWindow(cfg)
         window:EditOpenButton({
             Title = "Open NullExploits", Icon = OPEN_IMAGE,
             CornerRadius = UDim.new(0, 16), StrokeThickness = 2,
-            -- deliberately NOT colored here — Themes.Apply sets the gradient
             OnlyMobile = false,
             Enabled = CFG.UI.OpenButton ~= false,
             Draggable = true,
@@ -489,15 +484,14 @@ function lib:CreateWindow(cfg)
 
     Themes.SetWindow(window)
 
-    -- apply theme + size before we hand back
     task.defer(function()
         pcall(Themes.Apply, CFG.Theme.Current or "Banana")
         local size = CFG.UI.Size or "Default"
-        local scale = ({ Small = 0.8, Default = 1.0, Large = 1.2, XL = 1.5 })[size] or 1.0
+        local scale = ({ Small=0.8, Default=1.0, Large=1.2, XL=1.5 })[size] or 1.0
         if window.SetUIScale then pcall(function() window:SetUIScale(scale) end) end
     end)
 
-    -- lifecycle: closing the window must kill the script
+    -- lifecycle: closing the window kills the whole script
     local function onClose()
         if NullExploits.UI.Kill then pcall(NullExploits.UI.Kill) end
     end
@@ -536,6 +530,7 @@ lib.ToggleUI = function() end
 -- KILL — tears down loops, connections, window, genv
 -- =========================================================
 function NullExploits.UI.Kill()
+    NullExploits.Alive    = false
     NullExploits.UI.Alive = false
     for _, c in ipairs(NullExploits.UI.Connections) do
         pcall(function() c:Disconnect() end)
@@ -956,7 +951,7 @@ Frag:AddButton({ Text="Reroll Race", Func=function() end })
 Frag:AddButton({ Text="Buy Cyborg Race", Func=function() end })
 
 -- =========================================================
--- SETTINGS (themes + size, no scale slider)
+-- SETTINGS
 -- =========================================================
 local ThemeSec = Tabs.Settings:AddLeftGroupbox("Theme")
 local themeNames = Themes.Names()
