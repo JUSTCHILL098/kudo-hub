@@ -12,7 +12,7 @@ local BASE = "https://raw.githubusercontent.com/JUSTCHILL098/NullExploits/main"
 -- module loader — verbose errors
 -- =========================================================
 local function loadModule(rel)
-    local url = BASE .. "/" .. rel
+    local url = BASE .. "/" .. rel .. "?v=" .. tostring(os.time())
     local chunk
     local fetchOk = pcall(function()
         chunk = game:HttpGet(url)
@@ -60,18 +60,42 @@ local function loadWithRetry(rel, attempts)
 end
 
 -- =========================================================
--- kill previous instance
+-- kill previous instance (loops, connections, UI, ESP)
 -- =========================================================
 pcall(function()
-    if NullExploits and NullExploits.ESP and NullExploits.ESP.DestroyAll then
-        NullExploits.ESP.DestroyAll()
+    local g = getgenv and getgenv()
+    local old = g and g.NullExploits
+    if not old then return end
+
+    -- flip global alive flags so every StartLoop bails next tick
+    if old.UI and old.UI.Kill then
+        pcall(old.UI.Kill)
     end
-end)
-pcall(function()
-    local old = getgenv and getgenv().NullExploits
-    if old and old.UIWindow and old.UIWindow.Destroy then
-        old.UIWindow:Destroy()
+    old.Alive = false
+    if old.UI then old.UI.Alive = false end
+
+    -- kill every registered loop
+    if type(old.Loops) == "table" then
+        for key, loop in pairs(old.Loops) do
+            pcall(function()
+                if type(loop) == "table" and loop.Disconnect then loop:Disconnect()
+                elseif type(loop) == "function" then loop() end
+            end)
+            old.Loops[key] = nil
+        end
     end
+
+    -- kill ESP billboards/highlights
+    if old.ESP and old.ESP.DestroyAll then
+        pcall(old.ESP.DestroyAll)
+    end
+
+    -- destroy the window object
+    if old.UI and old.UI.Window and old.UI.Window.Destroy then
+        pcall(function() old.UI.Window:Destroy() end)
+    end
+
+    g.NullExploits = nil
 end)
 
 -- =========================================================
@@ -79,7 +103,7 @@ end)
 -- =========================================================
 do
     print("[NullExploits] base URL: " .. BASE)
-    local probeUrl = BASE .. "/src/01-config.lua"
+    local probeUrl = BASE .. "/src/01-config.lua?v=" .. tostring(os.time())
     local ok, res = pcall(function() return game:HttpGet(probeUrl) end)
     if not ok then
         warn("[NullExploits] preflight failed: " .. tostring(res))
@@ -107,6 +131,45 @@ if not loadWithRetry("src/01-config.lua", 2) then
     warn("[NullExploits] config failed — aborting")
     return false
 end
+
+-- =========================================================
+-- GLOBAL ALIVE FLAG — every StartLoop should check this
+-- =========================================================
+NullExploits = NullExploits or {}
+if NullExploits.Alive == nil then NullExploits.Alive = true end
+NullExploits.Loops = NullExploits.Loops or {}
+
+-- Patch StartLoop if the module didn't provide one that respects Alive
+if type(NullExploits.StartLoop) ~= "function" then
+    function NullExploits.StartLoop(name, fn, interval)
+        interval = interval or 1
+        NullExploits.Loops[name] = function()
+            if NullExploits.Loops[name] then NullExploits.Loops[name]._stop = true end
+        end
+        task.spawn(function()
+            local handle = NullExploits.Loops[name]
+            while NullExploits.Alive ~= false and not (handle and handle._stop) do
+                task.wait(interval)
+                if NullExploits.Alive == false then break end
+                pcall(fn)
+            end
+        end)
+    end
+end
+
+-- =========================================================
+-- POST-CONFIG: ensure CFG tables exist for downstream modules
+-- =========================================================
+pcall(function()
+    if not NullExploits.CFG then return end
+    local C = NullExploits.CFG
+    C.UI       = C.UI       or {}
+    C.Theme    = C.Theme    or {}
+    C.Teleport = C.Teleport or {}
+    C.Teleport.TPNPC    = C.Teleport.TPNPC    or ""
+    C.Teleport.TPPlayer = C.Teleport.TPPlayer or ""
+    C.Teleport.TPIsland = C.Teleport.TPIsland or ""
+end)
 
 -- =========================================================
 -- SOFT MODULES
