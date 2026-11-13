@@ -1,5 +1,5 @@
 -- language: Lua, file: src/07-ui.lua
--- NullExploits :: UI (Premium Dark Card-Based / Gradient Background)
+-- NullExploits :: UI (Premium Card-Based, Gradient, Collapsed by Default)
 
 NullExploits = NullExploits or {}
 local CFG = NullExploits.CFG or {}
@@ -10,7 +10,6 @@ local RunService       = game:GetService("RunService")
 local TeleportService  = game:GetService("TeleportService")
 local HttpService      = game:GetService("HttpService")
 local Lighting         = game:GetService("Lighting")
-local TweenService     = game:GetService("TweenService")
 local LP = Players.LocalPlayer
 
 local S = { Players = Players, RunSvc = RunService, TPS = TeleportService }
@@ -41,7 +40,7 @@ local function deepDefault(tbl, d)
     return tbl
 end
 
-CFG.UI    = deepDefault(CFG.UI,    { OpenButton = true, Size = "Default" })
+CFG.UI    = deepDefault(CFG.UI,    { OpenButton = true, Theme = "Premium Burgundy" })
 CFG.Combat = deepDefault(CFG.Combat, {
     Aimbot=false, AimTarget="Head", AimFOV=180, AimSmooth=1.0, AimPrediction=0.16,
     AimVisibleOnly=false, AimTeamCheck=false, AimWallCheck=false, AimAutoFire=false,
@@ -123,28 +122,27 @@ do
     end
     WindUI = res
 end
+NullExploits.WindUI = WindUI
 
--- =========================================================
--- PREMIUM DARK CARD THEME (Exact Hex Codes)
--- =========================================================
 local COL_ACCENT = Color3.fromHex("#D97878")
 local COL_ACCENT2 = Color3.fromHex("#A94F4F")
-local COL_BG = Color3.fromHex("#100808")
+local COL_BG = Color3.fromHex("#050505")
 local COL_CARD = Color3.fromHex("#321B1B")
 local COL_HOVER = Color3.fromHex("#402020")
 local COL_TEXT = Color3.fromHex("#F2EAEA")
 local COL_MUTED = Color3.fromHex("#A88F8F")
 local COL_BORDER = Color3.fromHex("#4A2C2C")
 
+-- Register Our Custom Theme directly in WindUI to stop other scripts from breaking it
 pcall(function()
     WindUI:AddTheme({
-        Name = "PremiumBurgundy",
+        Name = "Premium Burgundy",
         Accent      = COL_ACCENT,
-        Dialog      = COL_CARD, -- Card Background
+        Dialog      = COL_CARD,
         Outline     = COL_BORDER,
         Text        = COL_TEXT,
         Placeholder = COL_MUTED,
-        Background  = COL_BG, -- Secondary Background
+        Background  = COL_BG,
         Button      = COL_HOVER,
         Icon        = COL_ACCENT,
     })
@@ -161,7 +159,6 @@ local function safe(cb, ...)
     end
 end
 
--- Lucide Icons
 local tabIcons = {
     ["Info"]="lucide:info", ["Combat"]="lucide:crosshair", ["ESP"]="lucide:eye",
     ["Teleport"]="lucide:map-pin", ["Misc"]="lucide:settings", ["Raid"]="lucide:shield",
@@ -174,22 +171,20 @@ local function pick(a, b)
 end
 
 -- =========================================================
--- CARD SECTION WRAPPER
+-- CARD WRAPPER (CLOSED BY DEFAULT)
 -- =========================================================
 local function makeGroup(tab, name)
-    -- Force this section to look like a rounded card
     local container = tab
     local okS, sec = pcall(function() 
         return tab:Section({ 
             Title = name, 
-            Opened = true,
-            Box = true, -- Enforce card background
+            Opened = false, -- COLLAPSED BY DEFAULT
+            Box = true
         }) 
     end)
     
     if okS and type(sec) == "table" and type(sec.Toggle) == "function" then 
         container = sec 
-        -- Apply rounded corners to the section card if possible
         pcall(function()
             if sec.Instance and sec.Instance:IsA("Frame") then
                 local corner = Instance.new("UICorner")
@@ -206,23 +201,16 @@ local function makeGroup(tab, name)
     end
     
     local group = {}
-
     function group:AddToggle(a, b)
         local _, cfg = pick(a, b)
         local default = cfg.Default and true or false
-        local t = container:Toggle({
-            Title = cfg.Text or "Toggle", Value = default,
-            Callback = function(v) safe(cfg.Callback, v) end,
-        })
+        local t = container:Toggle({ Title = cfg.Text or "Toggle", Value = default, Callback = function(v) safe(cfg.Callback, v) end })
         if default then safe(cfg.Callback, true) end
         return t
     end
     function group:AddButton(a, b)
         local _, cfg = pick(a, b)
-        return container:Button({
-            Title = cfg.Text or "Button",
-            Callback = function() safe(cfg.Func or cfg.Callback) end,
-        })
+        return container:Button({ Title = cfg.Text or "Button", Callback = function() safe(cfg.Func or cfg.Callback) end })
     end
     function group:AddDropdown(a, b)
         local _, cfg = pick(a, b)
@@ -231,10 +219,7 @@ local function makeGroup(tab, name)
         local initial = type(default)=="number" and values[default] or (type(default)=="string" and default or values[1])
         local d = container:Dropdown({
             Title = cfg.Text or "Dropdown", Values = values, Value = initial,
-            Callback = function(v)
-                if type(v)=="table" then v = v.Title or v[1] end
-                safe(cfg.Callback, v)
-            end,
+            Callback = function(v) if type(v)=="table" then v = v.Title or v[1] end; safe(cfg.Callback, v) end,
         })
         if initial then safe(cfg.Callback, initial) end
         return d
@@ -252,11 +237,7 @@ local function makeGroup(tab, name)
     end
     function group:AddInput(a, b)
         local _, cfg = pick(a, b)
-        local i = container:Input({
-            Title = cfg.Text or "Input", Value = cfg.Default or "", Placeholder = cfg.Placeholder or "",
-            Callback = function(v) safe(cfg.Callback, v) end,
-        })
-        return i
+        return container:Input({ Title = cfg.Text or "Input", Value = cfg.Default or "", Placeholder = cfg.Placeholder or "", Callback = function(v) safe(cfg.Callback, v) end })
     end
     function group:AddLabel(text)
         local p = container:Paragraph({ Title = text or " " })
@@ -268,16 +249,16 @@ local function makeGroup(tab, name)
 end
 
 -- =========================================================
--- MAIN WINDOW CREATION & BACKGROUND GRADIENT
+-- WINDOW CREATION
 -- =========================================================
 function lib:CreateWindow(cfg)
     local window = WindUI:CreateWindow({
         Title = HUB_NAME,
-        Subtitle = "Kudo 〢 Blox Fruits", -- Placed in the metadata line
+        Subtitle = "Kudo 〢 Blox Fruits", -- The requested subtitle
         Icon = OPEN_IMAGE,
         Folder = "NullExploits",
         Size = UDim2.fromOffset(620, 460),
-        Theme = "PremiumBurgundy",
+        Theme = CFG.UI.Theme or "Premium Burgundy",
         Transparent = true, 
         Resizable = true,
         SideBarWidth = 190,
@@ -285,29 +266,29 @@ function lib:CreateWindow(cfg)
         ScrollBarEnabled = true,
     })
 
-    -- Apply the Gradient Background to the main window frame
+    -- Force gradient background 
     pcall(function()
         local mainGui = window.Gui or window.Instance or window.Frame
-        if mainGui and mainGui:FindFirstChild("Main") then
-            mainGui = mainGui.Main
-        end
+        if mainGui and mainGui:FindFirstChild("Main") then mainGui = mainGui.Main end
         if mainGui and mainGui:IsA("Frame") then
             local bg = mainGui:FindFirstChild("Background") or mainGui
             if bg and bg:IsA("Frame") then
+                local existing = bg:FindFirstChildOfClass("UIGradient")
+                if existing then existing:Destroy() end
+                
                 local gradient = Instance.new("UIGradient")
-                -- Transition from Pure Black -> Extremely Dark Burgundy -> Deep Wine Red
                 gradient.Color = ColorSequence.new({
                     ColorSequenceKeypoint.new(0.0, Color3.fromHex("#050505")),
                     ColorSequenceKeypoint.new(0.5, Color3.fromHex("#160707")),
                     ColorSequenceKeypoint.new(1.0, Color3.fromHex("#250D0D"))
                 })
-                gradient.Rotation = 90 -- Top to bottom
+                gradient.Rotation = 90 
                 gradient.Parent = bg
             end
         end
     end)
 
-    -- Update Fonts globally where possible
+    -- Apply better fonts
     pcall(function()
         local gui = window.Gui or window.Instance
         if gui then
@@ -372,7 +353,7 @@ local function bind(tbl, key) return function(v) tbl[key]=v; NullExploits.SaveCf
 local function bindFn(tbl, key, fn) return function(v) tbl[key]=v; pcall(fn, v); NullExploits.SaveCfg() end end
 
 -- =========================================================
--- INFO TAB (Boxed Cards)
+-- INFO TAB
 -- =========================================================
 local infoSec = Tabs.Info:AddLeftGroupbox("Status")
 local lblJob   = infoSec:AddLabel("JobId: …")
@@ -420,7 +401,6 @@ Aim:AddToggle("Aimbot", { Text="Aimbot", Default=CFG.Combat.Aimbot, Callback=bin
 Aim:AddDropdown("AimTarget", { Text="Target Bone", Values={"Head","HumanoidRootPart","UpperTorso","LowerTorso"}, Default=CFG.Combat.AimTarget, Callback=bind(CFG.Combat, "AimTarget") })
 Aim:AddSlider("AimFOV", { Text="FOV", Min=30, Max=360, Default=CFG.Combat.AimFOV, Callback=bind(CFG.Combat, "AimFOV") })
 Aim:AddSlider("AimSmooth", { Text="Smooth", Min=1, Max=10, Default=CFG.Combat.AimSmooth*10, Callback=function(v) CFG.Combat.AimSmooth=v/10; NullExploits.SaveCfg() end })
-Aim:AddSlider("AimPrediction", { Text="Prediction", Min=0, Max=50, Default=CFG.Combat.AimPrediction*100, Callback=function(v) CFG.Combat.AimPrediction=v/100; NullExploits.SaveCfg() end })
 Aim:AddToggle("AimVisibleOnly", { Text="Visible Only", Default=CFG.Combat.AimVisibleOnly, Callback=bind(CFG.Combat, "AimVisibleOnly") })
 Aim:AddToggle("AimTeamCheck", { Text="Team Check", Default=CFG.Combat.AimTeamCheck, Callback=bind(CFG.Combat, "AimTeamCheck") })
 Aim:AddToggle("AimWallCheck", { Text="Wall Check", Default=CFG.Combat.AimWallCheck, Callback=bind(CFG.Combat, "AimWallCheck") })
